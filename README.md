@@ -60,7 +60,13 @@ crypto_ws_api_init
 ```
 in terminal window.
 
-The config directory will be created. You get path to config `ws_api.toml`
+The config directory will be created. You get path to config:
+
+>ubuntu@ubuntu:~$ crypto_ws_api_init
+> 
+>Can't find config file! Creating it...
+> 
+>Before first run set account(s) API key into /home/ubuntu/.config/crypto_ws_api/ws_api.toml
 
 ### Prepare exchange account
 * For test purpose log in at [Binance Spot Test Network](https://testnet.binance.vision/)
@@ -82,8 +88,10 @@ _*`crypto_ws_api/demo.py` - complete and fully functional example*_
 ```bazaar
 from crypto_ws_api.ws_session import get_credentials, UserWSSession
 
-session = aiohttp.ClientSession()
+
 _exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
+
+session = aiohttp.ClientSession()
 
 user_session = UserWSSession(
     api_key,
