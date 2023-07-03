@@ -73,7 +73,10 @@ The config directory will be created. You get path to config `ws_api.toml`
 crypto_ws_api_demo
 ``` 
 
-## Useful tips (The `crypto_ws_api/demo.py` complete and fully functional snippets)
+## Useful tips
+
+_*`crypto_ws_api/demo.py` - complete and fully functional example*_
+
 ### Get credentials and create user session
 
 ```bazaar

@@ -194,7 +194,7 @@ class UserWSSession:
 
     def _handle_msg_error(self, msg):
         if msg.get('status') != 200:
-            error_msg = msg.get('error')
+            error_msg = str(msg.get('error'))
             logging.error("UserWSSession get error: %s", error_msg)
             if msg.get('status') >= 500:
                 raise ExchangeError("An issue occurred on exchange's side: %s", error_msg)
@@ -228,7 +228,6 @@ class UserWSSession:
 def get_credentials(_account_name: str) -> ():
     config = toml.load(str(CONFIG_FILE))
     accounts = config.get('accounts')
-    res = ()
     for account in accounts:
         if account.get('name') == _account_name:
             exchange = account['exchange']
@@ -241,11 +240,5 @@ def get_credentials(_account_name: str) -> ():
             #
             ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
             #
-            res = (exchange,        # 0
-                   test_net,        # 1
-                   api_key,         # 2
-                   api_secret,      # 3
-                   ws_api,          # 4
-                   )
-            break
-    return res
+            return exchange, test_net, api_key, api_secret, ws_api
+    raise UserWarning(f"Can't find account '{_account_name}' defined in {CONFIG_FILE}")

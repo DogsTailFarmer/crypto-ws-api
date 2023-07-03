@@ -12,8 +12,9 @@ async def main(account_name):
     logging.basicConfig(level=logging.INFO)
 
     # Get credentials and create user session
-    session = aiohttp.ClientSession()
     _exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
+
+    session = aiohttp.ClientSession()
 
     user_session = UserWSSession(
         api_key,
@@ -28,7 +29,7 @@ async def main(account_name):
     # Demo method's calling
     await account_information(user_session)
     asyncio.ensure_future(demo_loop(user_session, get_time, 1))
-    asyncio.ensure_future(demo_loop(user_session, current_average_price, 1))
+    asyncio.ensure_future(demo_loop(user_session, current_average_price, 2))
 
     await asyncio.sleep(15)
 
