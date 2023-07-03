@@ -126,7 +126,8 @@ class UserWSSession:
                 return self._handle_msg_error(res)
 
     async def _keepalive(self, interval=10):
-        while self.operational_status is not None:
+        listen_key = self._listen_key
+        while self.operational_status is not None and self._listen_key == listen_key:
             await asyncio.sleep(interval)
             if ((not self.operational_status or not self.order_handling)
                     and int(time.time() * 1000) - self._retry_after >= 0):
@@ -143,6 +144,7 @@ class UserWSSession:
                     else:
                         self.order_handling = True
                         logging.info("UserWSSession order limit restriction was cleared")
+        logging.warning(f"UserWSSession: keepalive loop stopped for {self.trade_id}")
 
     async def _heartbeat(self, interval=60 * 30):
         params = {
