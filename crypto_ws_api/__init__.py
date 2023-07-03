@@ -13,15 +13,13 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "1.0.0b1"
+__version__ = "1.0.0b2"
 
-import logging
 from pathlib import Path
 import shutil
 from platformdirs import user_config_path
 
 TIMEOUT = 10  # sec timeout for WSS receive
-logger = logging.getLogger('exch_srv_logger')
 
 CONFIG_PATH = user_config_path("crypto_ws_api")
 CONFIG_FILE = Path(CONFIG_PATH, "ws_api.toml")

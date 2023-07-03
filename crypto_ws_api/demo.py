@@ -3,13 +3,17 @@
 
 import aiohttp
 import asyncio
+import logging
+
 from crypto_ws_api.ws_session import get_credentials, UserWSSession
 
 
 async def main(account_name):
+    logging.basicConfig(level=logging.INFO)
+
     # Get credentials and create user session
     session = aiohttp.ClientSession()
-    _, _, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
+    _exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
 
     user_session = UserWSSession(
         api_key,
@@ -35,7 +39,7 @@ async def main(account_name):
 
 
 async def demo_loop(_session, _method, delay):
-    for i in range(10):
+    for _ in range(10):
         await _method(_session)
         await asyncio.sleep(delay)
 
@@ -43,15 +47,11 @@ async def demo_loop(_session, _method, delay):
 async def get_time(user_session: UserWSSession):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#check-server-time
     try:
-        res = {}
-        ws_status = bool(user_session and user_session.operational_status)
-        if ws_status:
-            res = await user_session.handle_request(
+        res = await user_session.handle_request(
                 "time",
             )
-        if not ws_status or res is None:
-            pass  # Handling out of service state
-
+        if res is None:
+            print("Here handling state Out-of-Service")
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
@@ -63,19 +63,15 @@ async def get_time(user_session: UserWSSession):
 async def current_average_price(user_session: UserWSSession):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#current-average-price
     try:
-        res = {}
-        ws_status = bool(user_session and user_session.operational_status)
-        if ws_status:
-            params = {
-                "symbol": "BNBBTC",
-            }
-            res = await user_session.handle_request(
-                "avgPrice",
-                params,
-            )
-        if not ws_status or res is None:
-            pass  # Handling out of service state
-
+        params = {
+            "symbol": "BNBBTC",
+        }
+        res = await user_session.handle_request(
+            "avgPrice",
+            params,
+        )
+        if res is None:
+            print("Here handling state Out-of-Service")
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
@@ -87,17 +83,13 @@ async def current_average_price(user_session: UserWSSession):
 async def account_information(user_session: UserWSSession):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#account-information-user_data
     try:
-        res = {}
-        ws_status = bool(user_session and user_session.operational_status)
-        if ws_status:
-            res = await user_session.handle_request(
-                "account.status",
-                api_key=True,
-                signed=True
-            )
-        if not ws_status or res is None:
-            pass  # Handling out of service state
-
+        res = await user_session.handle_request(
+            "account.status",
+            api_key=True,
+            signed=True
+        )
+        if res is None:
+            print("Here handling state Out-of-Service")
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:

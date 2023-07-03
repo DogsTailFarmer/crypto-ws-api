@@ -9,7 +9,12 @@
 <h3 align="center">Provides of connection management, keepalive and rate limits control</h3>
 
 ***
-Badges place here
+<a href="https://badge.fury.io/py/crypto-ws-api"><img src="https://badge.fury.io/py/crypto-ws-api.svg" alt="PyPI version"></a>
+<a href="https://codeclimate.com/github/DogsTailFarmer/crypto-ws-api/maintainability"><img src="https://api.codeclimate.com/v1/badges/2d2a654ba393eb88d911/maintainability" /></a>
+<a href="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api.svg/?label=resolved+issues&token=TXghPzbi0YWhkCLU8Q1tmDyQ"/></a>
+<a href="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api.svg/?label=active+issues&token=TXghPzbi0YWhkCLU8Q1tmDyQ"/></a>
+<a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_crypto-ws-api" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_crypto-ws-api&metric=alert_status"/></a>
+<a href="https://pepy.tech/project/crypto-ws-api" target="_blank"><img alt="Downloads" title="Downloads" src="https://static.pepy.tech/badge/crypto-ws-api"/></a>
 ***
 For :heavy_check_mark:Binance, 
 ***
@@ -29,6 +34,7 @@ Lightweight and efficient solution to utilize of all available methods provided 
   + Creating request on-the-fly from method name and params: {}
   + Generating signature if necessary
   + Response handling
+- logging
 
 ### User interface layer
 - Start session instance
@@ -48,7 +54,11 @@ For upgrade to latest versions use:
 pip install -U crypto_ws_api
 ```
 
-After first install create environment by run ```crypto_ws_api_init``` in terminal window.
+After first install create environment by run 
+```console
+crypto_ws_api_init
+```
+in terminal window.
 
 The config directory will be created. You get path to config `ws_api.toml`
 
@@ -59,16 +69,18 @@ The config directory will be created. You get path to config `ws_api.toml`
 
 ### Start demo
 * Run in terminal window
-  ```
-  crypto_ws_api_demo
-  ``` 
+```
+crypto_ws_api_demo
+``` 
 
-## Useful tips (see `demo.py` for reference)
+## Useful tips (The `crypto_ws_api/demo.py` complete and fully functional snippets)
 ### Get credentials and create user session
 
 ```bazaar
+from crypto_ws_api.ws_session import get_credentials, UserWSSession
+
 session = aiohttp.ClientSession()
-exchange, test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
+_exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
 
 user_session = UserWSSession(
     api_key,
@@ -97,17 +109,13 @@ print(f"Operational status: {user_session.operational_status}")
 async def account_information(user_session: UserWSSession):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#account-information-user_data
     try:
-        res = {}
-        ws_status = bool(user_session and user_session.operational_status)
-        if ws_status:
-            res = await user_session.handle_request(
-                "account.status",
-                api_key=True,
-                signed=True
-            )
-        if not ws_status or res is None:
-            pass  # Handling out of service state
-
+        res = await user_session.handle_request(
+            "account.status",
+            api_key=True,
+            signed=True
+        )
+        if res is None:
+            print("Here handling state Out-of-Service")
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
@@ -116,7 +124,7 @@ async def account_information(user_session: UserWSSession):
         print(f"Account information (USER_DATA) response: {res}")
 ```
 
-### [Limits control](https://developers.binance.com/docs/binance-trading-api/websocket_api#general-information-on-rate-limits)
+### [Limits control](https://developers.binance.com/docs/binance-trading-api/websocket_api#general-information-on-rate-limits) :link:
 Upon reaching the limit threshold of each type, the session switches to the Out-of-Service state. Monitor the values
 of the variables `user_session.operational_status` and `user_session.order_handling`
 
