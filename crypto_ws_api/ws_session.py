@@ -80,7 +80,7 @@ class UserWSSession:
         if self.operational_status is not None:
             self._try_count += 1
             delay = random.randint(1, 5) * self._try_count
-            logging.error("UserWSSession restart: delay: %ss, %s", delay, ex)
+            logging.error(f"UserWSSession restart: delay: {delay}s, {ex}")
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
 
@@ -194,10 +194,10 @@ class UserWSSession:
 
     def _handle_msg_error(self, msg):
         if msg.get('status') != 200:
-            error_msg = str(msg.get('error'))
-            logging.error("UserWSSession get error: %s", error_msg)
+            error_msg = msg.get('error')
+            logging.error(f"UserWSSession get error: {error_msg}")
             if msg.get('status') >= 500:
-                raise ExchangeError("An issue occurred on exchange's side: %s", error_msg)
+                raise ExchangeError(f"An issue occurred on exchange's side: {error_msg}")
             if msg.get('status') == 403:
                 self.operational_status = False
                 raise WAFLimitViolated(WAFLimitViolated.message)
@@ -208,7 +208,7 @@ class UserWSSession:
             if msg.get('status') == 429:
                 self.operational_status = False
                 raise RateLimitReached(RateLimitReached.message)
-            raise HTTPError("Malformed request: status: %s", error_msg)
+            raise HTTPError(f"Malformed request: status: {error_msg}")
         return msg.get('result')
 
     def _handle_rate_limits(self, rate_limits: []):
