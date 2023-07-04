@@ -15,6 +15,9 @@ from exchanges_wrapper.errors import ExchangeError, WAFLimitViolated, IPAddressB
 from crypto_ws_api import CONFIG_FILE, TIMEOUT
 
 
+logger = logging.getLogger(__name__)
+
+
 class UserWSSession:
     __slots__ = (
         "_api_key",
@@ -63,7 +66,7 @@ class UserWSSession:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
-            logging.error("UserWSSession: start() other exception: %s", ex)
+            logger.error("UserWSSession: start() other exception: %s", ex)
         else:
             self._session_tasks.append(asyncio.ensure_future(self._receive_msg()))
             self.operational_status = True
@@ -74,13 +77,13 @@ class UserWSSession:
                 self._listen_key = res.get('listenKey')
                 self._session_tasks.append(asyncio.ensure_future(self._heartbeat()))
                 self._session_tasks.append(asyncio.ensure_future(self._keepalive()))
-                logging.info("UserWSSession started for %s", self.trade_id)
+                logger.info("UserWSSession started for %s", self.trade_id)
 
     async def _ws_error(self, ex):
         if self.operational_status is not None:
             self._try_count += 1
             delay = random.randint(1, 5) * self._try_count
-            logging.error(f"UserWSSession restart: delay: {delay}s, {ex}")
+            logger.error(f"UserWSSession restart: delay: {delay}s, {ex}")
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
 
@@ -95,10 +98,10 @@ class UserWSSession:
         :return: result: {} or None if temporary Out-of-Service state
         """
         if not self.operational_status:
-            logging.warning("UserWSSession operational status is %s", self.operational_status)
+            logger.warning("UserWSSession operational status is %s", self.operational_status)
             return None
         elif method in ('order.place', 'order.cancelReplace') and not self.order_handling:
-            logging.warning("UserWSSession: exceeded order placement limit, try later")
+            logger.warning("UserWSSession: exceeded order placement limit, try later")
             return None
         else:
             _id = f"{self.trade_id}-{method.replace('.', '_')}"[-36:]
@@ -136,15 +139,15 @@ class UserWSSession:
                 except asyncio.CancelledError:
                     pass  # Task cancellation should not be logged as an error
                 except Exception as ex:
-                    logging.warning("UserWSSession._keepalive: %s", ex)
+                    logger.warning("UserWSSession._keepalive: %s", ex)
                 else:
                     if not self.operational_status:
                         self.operational_status = True
-                        logging.info("UserWSSession operational status restored")
+                        logger.info("UserWSSession operational status restored")
                     else:
                         self.order_handling = True
-                        logging.info("UserWSSession order limit restriction was cleared")
-        logging.warning(f"UserWSSession: keepalive loop stopped for {self.trade_id}")
+                        logger.info("UserWSSession order limit restriction was cleared")
+        logger.warning(f"UserWSSession: keepalive loop stopped for {self.trade_id}")
 
     async def _heartbeat(self, interval=60 * 30):
         params = {
@@ -158,7 +161,7 @@ class UserWSSession:
         """
         Stop data stream
         """
-        logging.info("STOP User WSS for %s", self.trade_id)
+        logger.info("STOP User WSS for %s", self.trade_id)
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
         req = {
@@ -182,7 +185,7 @@ class UserWSSession:
         except RuntimeError as ex:
             await self._ws_error(ex)
         except Exception as ex:
-            logging.error("UserWSSession._send_request: %s", ex)
+            logger.error("UserWSSession._send_request: %s", ex)
 
     async def _receive_msg(self):
         while self.operational_status is not None:
@@ -192,12 +195,12 @@ class UserWSSession:
             if queue:
                 await queue.put(msg)
             else:
-                logging.warning("Can't get queue for transporting message: %s", msg)
+                logger.warning("Can't get queue for transporting message: %s", msg)
 
     def _handle_msg_error(self, msg):
         if msg.get('status') != 200:
             error_msg = msg.get('error')
-            logging.error(f"UserWSSession get error: {error_msg}")
+            logger.error(f"UserWSSession get error: {error_msg}")
             if msg.get('status') >= 500:
                 raise ExchangeError(f"An issue occurred on exchange's side: {error_msg}")
             if msg.get('status') == 403:

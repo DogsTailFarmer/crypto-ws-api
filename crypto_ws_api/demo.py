@@ -3,15 +3,27 @@
 
 import aiohttp
 import asyncio
-import logging
+import logging.handlers
 
 from crypto_ws_api.ws_session import get_credentials, UserWSSession
 
 
-async def main(account_name):
-    logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+#
+sh = logging.StreamHandler()
+sh.setFormatter(formatter)
+sh.setLevel(logging.DEBUG)
+#
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(sh)
 
+
+async def main(account_name):
     # Get credentials and create user session
+
+    # Can be omitted if you have credentials
     _exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
 
     session = aiohttp.ClientSession()
@@ -100,4 +112,5 @@ async def account_information(user_session: UserWSSession):
 
 
 if __name__ == '__main__':
+    logger.info("INFO logging message from demo.main()")
     asyncio.run(main('Demo - Binance'))

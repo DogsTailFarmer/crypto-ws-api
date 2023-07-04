@@ -88,7 +88,7 @@ _*`crypto_ws_api/demo.py` - complete and fully functional example*_
 ```bazaar
 from crypto_ws_api.ws_session import get_credentials, UserWSSession
 
-
+# Can be omitted if you have credentials
 _exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
 
 session = aiohttp.ClientSession()
@@ -135,7 +135,24 @@ async def account_information(user_session: UserWSSession):
         print(f"Account information (USER_DATA) response: {res}")
 ```
 
-### [Limits control](https://developers.binance.com/docs/binance-trading-api/websocket_api#general-information-on-rate-limits) :link:
+### Logging setup
+For configure logging in multi-module project use next snippet for yours `main()`:
+```bazaar
+import logging.handlers
+
+logger = logging.getLogger(__name__)
+formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+#
+sh = logging.StreamHandler()
+sh.setFormatter(formatter)
+sh.setLevel(logging.DEBUG)
+#
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(sh)
+```
+
+## [Limits control](https://developers.binance.com/docs/binance-trading-api/websocket_api#general-information-on-rate-limits) :link:
 Upon reaching the limit threshold of each type, the session switches to the Out-of-Service state. Monitor the values
 of the variables `user_session.operational_status` and `user_session.order_handling`
 
