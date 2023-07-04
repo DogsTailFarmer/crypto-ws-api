@@ -104,7 +104,8 @@ class UserWSSession:
             logger.warning("UserWSSession: exceeded order placement limit, try later")
             return None
         else:
-            _id = f"{self.trade_id}-{method.replace('.', '_')}"[-36:]
+            _symbol = params.get('symbol', '') if params else ''
+            _id = f"{self.trade_id}-{method.replace('.', '_')}{_symbol}"[-36:]
             queue = self._queue.setdefault(_id, asyncio.Queue())
             req = {'id': _id, "method": method}
             if (api_key or signed) and not params:
