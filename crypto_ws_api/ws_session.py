@@ -37,11 +37,14 @@ class UserWSSession:
 
     def __init__(
             self,
-            api_key: str,
-            api_secret: str,
-            session: aiohttp.ClientSession,
-            endpoint: str
+            api_key: str = None,
+            api_secret: str = None,
+            session: aiohttp.ClientSession = None,
+            endpoint: str = None
     ):
+        if None in {api_key, api_secret, session, endpoint}:
+            raise UserWarning("UserWSSession: all parameters must be set")
+
         self._api_key = api_key
         self._api_secret = api_secret
         self._session = session
@@ -98,7 +101,7 @@ class UserWSSession:
         :return: result: {} or None if temporary Out-of-Service state
         """
         if not self.operational_status:
-            logger.warning("UserWSSession operational status is %s", self.operational_status)
+            logger.warning(f"UserWSSession operational status is {self.operational_status}, method: {method}")
             return None
         elif method in ('order.place', 'order.cancelReplace') and not self.order_handling:
             logger.warning("UserWSSession: exceeded order placement limit, try later")
