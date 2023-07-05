@@ -101,7 +101,7 @@ class UserWSSession:
         :return: result: {} or None if temporary Out-of-Service state
         """
         if not self.operational_status:
-            logger.warning(f"UserWSSession operational status is {self.operational_status}, method: {method}")
+            logger.warning("UserWSSession operational status is %s", self.operational_status)
             return None
         elif method in ('order.place', 'order.cancelReplace') and not self.order_handling:
             logger.warning("UserWSSession: exceeded order placement limit, try later")
