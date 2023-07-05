@@ -1,15 +1,11 @@
-
-<p align="center"><img src="https://user-images.githubusercontent.com/77513676/250364389-cbedc171-a930-4467-a0cd-21627a6a41ed.svg" width="250"></p>
-
-***
-<h1 align="center">Crypto WS API connector for ASYNC requests</h1>
+<h1 align="center"><img align="center" src="https://user-images.githubusercontent.com/77513676/250364389-cbedc171-a930-4467-a0cd-21627a6a41ed.svg" width="75">Crypto WS API connector for ASYNC requests</h1>
 
 <h2 align="center">Full coverage of all methods provided by the interface</h2>
 
 <h3 align="center">Provides of connection management, keepalive and rate limits control</h3>
 
 ***
-<a href="https://badge.fury.io/py/crypto-ws-api"><img src="https://badge.fury.io/py/crypto-ws-api.svg" alt="PyPI version"></a>
+<a href="https://pypi.org/project/crypto-ws-api/"><img src="https://img.shields.io/pypi/v/crypto-ws-api" alt="PyPI version"></a>
 <a href="https://codeclimate.com/github/DogsTailFarmer/crypto-ws-api/maintainability"><img src="https://api.codeclimate.com/v1/badges/2d2a654ba393eb88d911/maintainability" /></a>
 <a href="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api.svg/?label=resolved+issues&token=TXghPzbi0YWhkCLU8Q1tmDyQ"/></a>
 <a href="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api.svg/?label=active+issues&token=TXghPzbi0YWhkCLU8Q1tmDyQ"/></a>
