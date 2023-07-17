@@ -24,24 +24,27 @@ async def main(account_name):
     # Get credentials and create user session
 
     # Can be omitted if you have credentials
-    _exchange, _test_net, api_key, api_secret, ws_api_endpoint = get_credentials(account_name)
+    exchange, _test_net, api_key, api_secret, passphrase, ws_api_endpoint = get_credentials(account_name)
 
     session = aiohttp.ClientSession()
 
     user_session = UserWSSession(
+        exchange,
         api_key,
         api_secret,
+        endpoint=ws_api_endpoint,
         session=session,
-        endpoint=ws_api_endpoint
     )
 
     await user_session.start()
     print(f"Operational status: {user_session.operational_status}")
 
+    '''
     # Demo method's calling
     await account_information(user_session)
     asyncio.ensure_future(demo_loop(user_session, get_time, 1))
     asyncio.ensure_future(demo_loop(user_session, current_average_price, 2))
+    '''
 
     await asyncio.sleep(15)
 
