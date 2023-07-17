@@ -1,3 +1,7 @@
+## v1.0.1-2 - 2023-07-17
+### Update
+* `requirements.txt`: remove ver. spec for exchanges-wrapper
+
 ## v1.0.1-1 - 2023-07-05
 ### Update
 * README.md
