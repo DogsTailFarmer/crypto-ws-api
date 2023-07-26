@@ -110,12 +110,12 @@ class UserWSSession:
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
 
-    async def handle_request(self, method: str, params=None, api_key=False, signed=False):
+    async def handle_request(self, method: str, _params=None, api_key=False, signed=False):
         """
         Construct and handling request/response to WS API endpoint, use a description of the methods on
         https://developers.binance.com/docs/binance-trading-api/websocket_api#request-format
         :param method: 'method'
-        :param params: 'params'
+        :param _params: 'params'
         :param api_key: True if API key must be sent
         :param signed: True if signature must be sent
         :return: result: {} or None if temporary Out-of-Service state
@@ -127,6 +127,7 @@ class UserWSSession:
             logger.warning("UserWSSession: exceeded order placement limit, try later")
             return None
         else:
+            params = _params.copy() if _params else None
             if self.exchange == 'okx' and method in ('userDataStream.start', 'ping'):
                 _id = f"{self.trade_id}{self.exchange}"
             else:
@@ -236,6 +237,7 @@ class UserWSSession:
         [_task.cancel() for _task in self._session_tasks]
         if self._web_socket:
             await self._web_socket.close()
+        self._queue.clear()
 
     async def _send_request(self, req: {}):
         try:
@@ -251,7 +253,7 @@ class UserWSSession:
         while self.operational_status is not None:
             msg = await self._web_socket.receive_json()
 
-            print(f"_receive_msg: msg: {msg}")
+            # print(f"_receive_msg: msg: {msg}")
 
             if self.exchange == 'binance':
                 self._handle_rate_limits(msg.pop('rateLimits', []))
