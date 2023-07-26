@@ -1,3 +1,7 @@
+## v1.0.2b2 - 2023-07-26
+### Added for new features
+* OKX implemented
+
 ## v1.0.1-1 - 2023-07-05
 ### Update
 * README.md

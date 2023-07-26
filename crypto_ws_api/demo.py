@@ -39,12 +39,10 @@ async def main(account_name):
     await user_session.start()
     print(f"Operational status: {user_session.operational_status}")
 
-    '''
     # Demo method's calling
     await account_information(user_session)
     asyncio.ensure_future(demo_loop(user_session, get_time, 1))
     asyncio.ensure_future(demo_loop(user_session, current_average_price, 2))
-    '''
 
     await asyncio.sleep(15)
 

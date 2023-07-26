@@ -35,6 +35,7 @@ class UserWSSession:
         "trade_id",
         "operational_status",
         "order_handling",
+        "in_recovery",
     )
 
     def __init__(
@@ -67,9 +68,10 @@ class UserWSSession:
         self.trade_id = None
         self.operational_status = False
         self.order_handling = False
+        self.in_recovery = None
 
     async def start(self, trade_id=shortuuid.uuid()):
-        self.trade_id = trade_id or self.trade_id
+        self.trade_id = self.trade_id or trade_id
         heartbeat = None
         try:
             if self.exchange == 'binance':
@@ -78,6 +80,7 @@ class UserWSSession:
                 heartbeat = 25
             self._web_socket = await self._session.ws_connect(self._endpoint, heartbeat=heartbeat)
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
+            self.in_recovery = None
             await self._ws_error(ex)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
@@ -93,20 +96,21 @@ class UserWSSession:
                 self._session_tasks.append(asyncio.ensure_future(self._heartbeat()))
             else:
                 self._listen_key = f"{self.trade_id}{int(time.time() * 1000)}"
-
+            self.in_recovery = None
             self._try_count = 0
             self._session_tasks.append(asyncio.ensure_future(self._keepalive()))
             logger.info("UserWSSession started for %s", self.trade_id)
 
     async def _ws_error(self, ex):
-        if self.operational_status is not None:
+        if self.operational_status is not None and self.in_recovery is None:
+            self.in_recovery = True
             self._try_count += 1
             delay = random.randint(1, 5) * self._try_count
             logger.error(f"UserWSSession restart: delay: {delay}s, {ex}")
             await asyncio.sleep(delay)
             asyncio.ensure_future(self.start())
 
-    async def handle_request(self, method: str, params: {} = None, api_key=False, signed=False):
+    async def handle_request(self, method: str, params=None, api_key=False, signed=False):
         """
         Construct and handling request/response to WS API endpoint, use a description of the methods on
         https://developers.binance.com/docs/binance-trading-api/websocket_api#request-format
@@ -119,21 +123,27 @@ class UserWSSession:
         if not self.operational_status:
             logger.warning("UserWSSession operational status is %s", self.operational_status)
             return None
-        elif method in ('order.place', 'order.cancelReplace') and not self.order_handling:
+        elif method in ('order.place', 'order.cancelReplace', 'order') and not self.order_handling:
             logger.warning("UserWSSession: exceeded order placement limit, try later")
             return None
         else:
-            _symbol = params.get('symbol', '') if params else ''
-
             if self.exchange == 'okx' and method in ('userDataStream.start', 'ping'):
-                _id = f"{self.trade_id}-{self.exchange}"
+                _id = f"{self.trade_id}{self.exchange}"
             else:
-                _id = f"{self.trade_id}-{method.replace('.', '_')}{_symbol}"[-ID_LEN_LIMIT[self.exchange]:]
-
+                _symbol = ''
+                if self.exchange == 'binance' and params:
+                    _symbol = params.get('symbol', '')
+                elif self.exchange == 'okx' and params:
+                    if isinstance(params, dict):
+                        _symbol = params.get('instId', '')
+                    elif isinstance(params, list):
+                        _symbol = params[0].get('instId', '')
+                _id = f"{self.trade_id}{method}{_symbol}"
+            _id = ''.join(e for e in _id if e.isalnum())[-ID_LEN_LIMIT[self.exchange]:]
             queue = self._queue.setdefault(_id, asyncio.Queue())
-
-            await self._send_request(self.compose_request(_id, api_key, method, params, signed))
-
+            await self._send_request(
+                self.compose_request(_id, api_key, method, params, signed)
+            )
             try:
                 res = await asyncio.wait_for(queue.get(), timeout=TIMEOUT)
             except asyncio.TimeoutError:
@@ -146,24 +156,21 @@ class UserWSSession:
 
     def compose_request(self, _id, api_key, method, params, signed):
         req = None
-        if self.exchange == 'binance':
-            req = {'id': _id, "method": method}
+        if self.exchange == "binance":
+            req = {"id": _id, "method": method}
             if (api_key or signed) and not params:
                 params = {}
             if api_key:
-                params['apiKey'] = self._api_key
+                params["apiKey"] = self._api_key
             if signed:
-                params['timestamp'] = int(time.time() * 1000)
+                params["timestamp"] = int(time.time() * 1000)
                 payload = '&'.join(f"{key}={value}" for key, value in dict(sorted(params.items())).items())
-                params['signature'] = generate_signature('binance_ws', self._api_secret, payload)
+                params["signature"] = generate_signature('binance_ws', self._api_secret, payload)
             if params:
-                req['params'] = params
-
-        elif self.exchange == 'okx':
-            # Check released methods
-            if method not in ('userDataStream.start', 'ping'):
-                raise UserWarning(f"UserWSSession: method {method} not released for OKX")
-            if method == 'userDataStream.start':
+                req["params"] = params
+        elif self.exchange == "okx":
+            if method == "userDataStream.start":
+                # https://www.okx.com/docs-v5/en/?python#overview-websocket-connect
                 ts = int(time.time())
                 signature_payload = f"{ts}GET/users/self/verify"
                 signature = generate_signature(self.exchange, self._api_secret, signature_payload)
@@ -175,10 +182,10 @@ class UserWSSession:
                                  "sign": signature}
                                 ]
                        }
-            elif method == 'ping':
-                req = 'ping'
-
-        print(f"compose_request: {req}")
+            elif method == "ping":
+                req = "ping"
+            else:
+                req = {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
         return req
 
     async def _keepalive(self, interval=10):
@@ -244,10 +251,12 @@ class UserWSSession:
         while self.operational_status is not None:
             msg = await self._web_socket.receive_json()
 
+            print(f"_receive_msg: msg: {msg}")
+
             if self.exchange == 'binance':
                 self._handle_rate_limits(msg.pop('rateLimits', []))
 
-            queue = self._queue.get(msg.get('id') or f"{self.trade_id}-{self.exchange}")
+            queue = self._queue.get(msg.get('id') or f"{self.trade_id}{self.exchange}")
             if queue:
                 await queue.put(msg)
             else:

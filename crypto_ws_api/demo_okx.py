@@ -45,10 +45,9 @@ async def main(account_name):
     await account_information(user_session)
     asyncio.ensure_future(demo_loop(user_session, get_time, 1))
     asyncio.ensure_future(demo_loop(user_session, current_average_price, 2))
-    '''
 
     await asyncio.sleep(60)
-
+    '''
     # Stop user session and close aiohttp session
     await user_session.stop()
     await session.close()
