@@ -38,17 +38,9 @@ class UserWSSession:
         "in_recovery",
     )
 
-    def __init__(
-            self,
-            exchange: str = None,
-            api_key: str = None,
-            api_secret: str = None,
-            passphrase: str = None,
-            endpoint: str = None,
-            session: aiohttp.ClientSession = None
-    ):
-        if exchange not in ('binance', 'okx'):
-            raise UserWarning(f"UserWSSession: exchange {exchange} not not serviced")
+    def __init__(self, exchange, api_key, api_secret, endpoint, passphrase=None, session: aiohttp.ClientSession = None):
+        if exchange not in ('binance', 'okx', 'bitfinex'):
+            raise UserWarning(f"UserWSSession: exchange {exchange} not serviced")
         if None in {api_key, api_secret, endpoint} or (exchange == 'okx' and passphrase is None):
             raise UserWarning("UserWSSession: all account parameters must be set")
 
@@ -74,11 +66,14 @@ class UserWSSession:
         self.trade_id = self.trade_id or trade_id
         heartbeat = None
         try:
-            if self.exchange == 'binance':
-                heartbeat = 500
-            elif self.exchange == 'okx':
-                heartbeat = 25
-            self._web_socket = await self._session.ws_connect(self._endpoint, heartbeat=heartbeat)
+            if self.exchange == 'bitfinex':
+                self._web_socket = await self._session.ws_connect(self._endpoint, receive_timeout=30)
+            else:
+                if self.exchange == 'binance':
+                    heartbeat = 500
+                elif self.exchange == 'okx':
+                    heartbeat = 25
+                self._web_socket = await self._session.ws_connect(self._endpoint, heartbeat=heartbeat)
         except (aiohttp.WSServerHandshakeError, aiohttp.ClientConnectionError, asyncio.TimeoutError) as ex:
             self.in_recovery = None
             await self._ws_error(ex)
@@ -187,6 +182,17 @@ class UserWSSession:
                 req = "ping"
             else:
                 req = {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
+        elif self.exchange == 'bitfinex':
+            ts = int(time.time() * 1000)
+            data = f"AUTH{ts}"
+            req = {
+                'event': "auth",
+                'apiKey': self._api_key,
+                'authSig': generate_signature(self.exchange, self._api_secret, data),
+                'authPayload': data,
+                'authNonce': ts,
+                'filter': []
+            }
         return req
 
     async def _keepalive(self, interval=10):
@@ -253,7 +259,7 @@ class UserWSSession:
         while self.operational_status is not None:
             msg = await self._web_socket.receive_json()
 
-            # print(f"_receive_msg: msg: {msg}")
+            print(f"_receive_msg: msg: {msg}")
 
             if self.exchange == 'binance':
                 self._handle_rate_limits(msg.pop('rateLimits', []))
@@ -282,7 +288,7 @@ class UserWSSession:
                     raise RateLimitReached(RateLimitReached.message)
                 raise HTTPError(f"Malformed request: status: {error_msg}")
             return msg.get('result')
-        else:
+        elif self.exchange == 'okx':
             if msg.get('code') != '0' and not (msg.get('code') == '60012' and 'ping' in msg.get('msg')):
                 if msg.get('code') == '63999':
                     raise ExchangeError(f"An issue occurred on exchange's side: {msg}")
