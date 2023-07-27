@@ -3,6 +3,7 @@
 
 import aiohttp
 import asyncio
+import shortuuid
 import logging.handlers
 
 from crypto_ws_api.ws_session import get_credentials, UserWSSession
@@ -27,6 +28,7 @@ async def main(account_name):
     exchange, _test_net, api_key, api_secret, passphrase, ws_api_endpoint = get_credentials(account_name)
 
     session = aiohttp.ClientSession()
+    trade_id = shortuuid.uuid()
 
     user_session = UserWSSession(
         exchange,
@@ -36,13 +38,10 @@ async def main(account_name):
         session=session,
     )
 
-    await user_session.start()
-    print(f"Operational status: {user_session.operational_status}")
-
     # Demo method's calling
-    await account_information(user_session)
-    asyncio.ensure_future(demo_loop(user_session, get_time, 1))
-    asyncio.ensure_future(demo_loop(user_session, current_average_price, 2))
+    await account_information(user_session, trade_id)
+    asyncio.ensure_future(demo_loop(user_session, get_time, trade_id, 1))
+    asyncio.ensure_future(demo_loop(user_session, current_average_price, trade_id, 2))
 
     await asyncio.sleep(15)
 
@@ -52,17 +51,18 @@ async def main(account_name):
     print(f"Operational status: {user_session.operational_status}")
 
 
-async def demo_loop(_session, _method, delay):
+async def demo_loop(_session, _method, _trade_id, delay):
     for _ in range(10):
-        await _method(_session)
+        await _method(_session, _trade_id)
         await asyncio.sleep(delay)
 
 
-async def get_time(user_session: UserWSSession):
+async def get_time(user_session: UserWSSession, _trade_id):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#check-server-time
     try:
         res = await user_session.handle_request(
                 "time",
+                _trade_id,
             )
         if res is None:
             print("Here handling state Out-of-Service")
@@ -74,7 +74,7 @@ async def get_time(user_session: UserWSSession):
         print(f"Check server time response: {res}")
 
 
-async def current_average_price(user_session: UserWSSession):
+async def current_average_price(user_session: UserWSSession, _trade_id):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#current-average-price
     try:
         params = {
@@ -82,6 +82,7 @@ async def current_average_price(user_session: UserWSSession):
         }
         res = await user_session.handle_request(
             "avgPrice",
+            _trade_id,
             params,
         )
         if res is None:
@@ -94,13 +95,14 @@ async def current_average_price(user_session: UserWSSession):
         print(f"Current average price response: {res}")
 
 
-async def account_information(user_session: UserWSSession):
+async def account_information(user_session: UserWSSession, _trade_id):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#account-information-user_data
     try:
         res = await user_session.handle_request(
             "account.status",
-            api_key=True,
-            signed=True
+            _trade_id,
+            _api_key=True,
+            _signed=True
         )
         if res is None:
             print("Here handling state Out-of-Service")
