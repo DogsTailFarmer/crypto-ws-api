@@ -4,14 +4,13 @@ import asyncio
 import random
 import time
 import aiohttp
-import toml
 import logging
 
 from exchanges_wrapper.c_structures import generate_signature
 from exchanges_wrapper.definitions import RateLimitInterval
 from exchanges_wrapper.errors import ExchangeError, WAFLimitViolated, IPAddressBanned, RateLimitReached, HTTPError
 
-from crypto_ws_api import CONFIG_FILE, TIMEOUT, ID_LEN_LIMIT
+from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
 
 
 logger = logging.getLogger(__name__)
@@ -227,7 +226,8 @@ class UserWSSession:
         return req
 
     async def _keepalive(self, _ws_id, interval=10):
-        while self.operational_status is not None:
+        listen_key = self._listen_key
+        while self.operational_status is not None and self._listen_key == listen_key:
             await asyncio.sleep(interval)
             if ((not self.operational_status or not self.order_handling)
                     and int(time.time() * 1000) - self._retry_after >= 0):
@@ -276,7 +276,7 @@ class UserWSSession:
     async def _receive_msg(self, _ws, _queue):
         while self.operational_status is not None:
             msg = await _ws.receive_json()
-            # print(f"_receive_msg: msg: {msg}")
+            print(f"_receive_msg: msg: {msg}")
             if self.exchange == 'binance':
                 self._handle_rate_limits(msg.pop('rateLimits', []))
             await _queue.put(msg)
@@ -321,23 +321,3 @@ class UserWSSession:
                     self.operational_status = False
                 elif rl.get('rateLimitType') == 'ORDERS':
                     self.order_handling = False
-
-
-def get_credentials(_account_name: str) -> ():
-    config = toml.load(str(CONFIG_FILE))
-    accounts = config.get('accounts')
-    for account in accounts:
-        if account.get('name') == _account_name:
-            exchange = account['exchange']
-            test_net = account['test_net']
-            #
-            api_key = account['api_key']
-            api_secret = account['api_secret']
-            passphrase = account.get('passphrase')
-            #
-            endpoint = config['endpoint'][exchange]
-            #
-            ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
-            #
-            return exchange, test_net, api_key, api_secret, passphrase, ws_api
-    raise UserWarning(f"Can't find account '{_account_name}' defined in {CONFIG_FILE}")

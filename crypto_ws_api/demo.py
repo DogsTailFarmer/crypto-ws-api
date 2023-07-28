@@ -5,8 +5,10 @@ import aiohttp
 import asyncio
 import shortuuid
 import logging.handlers
+import toml
 
-from crypto_ws_api.ws_session import get_credentials, UserWSSession
+from crypto_ws_api import CONFIG_FILE
+from crypto_ws_api.ws_session import UserWSSession
 
 
 logger = logging.getLogger(__name__)
@@ -112,6 +114,26 @@ async def account_information(user_session: UserWSSession, _trade_id):
         print(f"Handling exception: {_ex}")
     else:
         print(f"Account information (USER_DATA) response: {res}")
+
+
+def get_credentials(_account_name: str) -> ():
+    config = toml.load(str(CONFIG_FILE))
+    accounts = config.get('accounts')
+    for account in accounts:
+        if account.get('name') == _account_name:
+            exchange = account['exchange']
+            test_net = account['test_net']
+            #
+            api_key = account['api_key']
+            api_secret = account['api_secret']
+            passphrase = account.get('passphrase')
+            #
+            endpoint = config['endpoint'][exchange]
+            #
+            ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
+            #
+            return exchange, test_net, api_key, api_secret, passphrase, ws_api
+    raise UserWarning(f"Can't find account '{_account_name}' defined in {CONFIG_FILE}")
 
 
 if __name__ == '__main__':
