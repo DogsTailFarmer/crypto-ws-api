@@ -3,12 +3,13 @@
 import asyncio
 import time
 import aiohttp
+import contextlib
 import logging
 import json
 
 from exchanges_wrapper.c_structures import generate_signature
 from exchanges_wrapper.definitions import RateLimitInterval
-from exchanges_wrapper.errors import ExchangeError, WAFLimitViolated, IPAddressBanned, RateLimitReached, HTTPError
+from exchanges_wrapper.errors import ExchangeError, IPAddressBanned, RateLimitReached, HTTPError
 
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
 
@@ -17,27 +18,24 @@ logger = logging.getLogger(__name__)
 
 
 class UserWSS:
-
-    '''
     __slots__ = (
+        "init",
+        "session",
+        "method",
+        "exchange",
+        "endpoint",
         "_api_key",
         "_api_secret",
         "_passphrase",
-        "_session",
-        "_endpoint",
         "_ws",
         "_listen_key",
-        "_try_count",
-        "_retry_after",
-        "_session_tasks",
         "_queue",
-        "exchange",
-        "trade_id",
+        "_retry_after",
+        "ws_id",
         "operational_status",
         "order_handling",
-        "in_recovery",
+        "request_limit_reached",
     )
-    '''
 
     def __init__(self, session, method, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None):
         self.init = None
@@ -60,7 +58,6 @@ class UserWSS:
         self.request_limit_reached = False
 
     async def get_ws(self):
-        logger.info(f"get_ws: START: {self.ws_id}")
         self.init = True
         _heartbeat = None
         _receive_timeout = None
@@ -95,8 +92,8 @@ class UserWSS:
                     await self._ws.close()
                     self.operational_status = None
                     self.init = None
-            logger.warning(f"UserWSSession: WSS receive loop stopped: {self.ws_id}")
-        logger.warning(f"get_ws: stopped: {self.ws_id}")
+            logger.debug(f"UserWSSession: WSS receive loop stopped: {self.ws_id}")
+        logger.debug(f"get_ws: stopped: {self.ws_id}")
 
     async def ws_login(self):
         res = await self.request('userDataStream.start', _api_key=True)
@@ -106,7 +103,8 @@ class UserWSS:
         else:
             self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
         self.order_handling = True
-        asyncio.ensure_future(self._keepalive())
+        with contextlib.suppress(asyncio.CancelledError):
+            asyncio.ensure_future(self._keepalive())
         logger.info(f"UserWSSession: logged in for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
@@ -221,7 +219,7 @@ class UserWSS:
         logger.info("STOP User WSS for %s", self.ws_id)
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
-        self._ws.close()
+        await self._ws.close()
         self._queue = None
 
     def _handle_msg_error(self, msg):
@@ -273,26 +271,16 @@ class UserWSS:
 
 
 class UserWSSession:
-    '''
     __slots__ = (
+        "session",
+        "exchange",
+        "endpoint",
         "_api_key",
         "_api_secret",
         "_passphrase",
-        "_session",
-        "_endpoint",
-        "_ws",
-        "_listen_key",
-        "_try_count",
-        "_retry_after",
-        "_session_tasks",
-        "_queue",
-        "exchange",
-        "trade_id",
-        "operational_status",
-        "order_handling",
-        "in_recovery",
+        "user_wss",
     )
-    '''
+
     def __init__(self, session, exchange, endpoint, api_key, api_secret, passphrase=None):
         if exchange not in ('binance', 'okx', 'bitfinex'):
             raise UserWarning(f"UserWSSession: exchange {exchange} not serviced")
@@ -331,7 +319,8 @@ class UserWSSession:
         if user_wss.init is None:
             _init = True
             user_wss.operational_status = False
-            asyncio.ensure_future(user_wss.get_ws())
+            with contextlib.suppress(asyncio.CancelledError):
+                asyncio.ensure_future(user_wss.get_ws())
         else:
             while not (user_wss.operational_status and user_wss.order_handling):
                 await asyncio.sleep(1)
