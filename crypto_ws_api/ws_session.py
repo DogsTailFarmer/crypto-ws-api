@@ -6,14 +6,36 @@ import aiohttp
 import contextlib
 import logging
 import json
-
-from exchanges_wrapper.c_structures import generate_signature
-from exchanges_wrapper.definitions import RateLimitInterval
+from enum import Enum
+import hmac
+import hashlib
+import base64
 
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
 
 
 logger = logging.getLogger(__name__)
+
+
+def generate_signature(exchange, api_secret, data):
+    if exchange == 'bitfinex':
+        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha384).hexdigest()
+    elif exchange in ('huobi', 'okx'):
+        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).digest()
+        sig = base64.b64encode(sig).decode()
+    elif exchange == 'binance_ws':
+        sig = hmac.new(api_secret.encode("ascii"), data.encode("ascii"), hashlib.sha256).hexdigest()
+    else:
+        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
+    return sig
+
+
+# https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
+class RateLimitInterval(Enum):
+    SECOND = 1
+    MINUTE = 60
+    HOUR = 3600
+    DAY = 86400
 
 
 class UserWSS:
@@ -84,20 +106,24 @@ class UserWSS:
                     logger.info(f"UserWSS: started for: {self.ws_id}")
             while self.operational_status:
                 msg = await self._ws.receive()
+                logger.info(f"get_ws: {self.ws_id}: msg: {msg}")
                 if msg.type == aiohttp.WSMsgType.TEXT:
-                    # logger.info(f"get_ws: msg: {msg}")
-                    # await self._queue.put(json.loads(msg.data))
+                    res = await self._handle_msg(json.loads(msg.data))
 
-                    res = json.loads(msg.data)
-                    if self.exchange in ('binance', 'okx'):
-                        self._response_pool[res.get('id')] = res
-                        self._event.set()
-                        self._event.clear()
-                    else:
-                        pass  # Bitfinex
+                    if self.exchange == 'binance':
+                        self._response_pool[res.get('id')] = res.get('result')
+                    elif self.exchange == 'okx':
+                        self._response_pool[res.get('id') or self.ws_id] = res.get('data')
+                    elif self.exchange == 'bitfinex':
+                        logger.info(f"get_ws: {self.ws_id}: res: {res}")
+                        if res is not None:
+                            self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
+
+                    self._event.set()
+                    self._event.clear()
 
                 else:
-                    logger.error(f"UserWSS: {self.ws_id}: {msg}")
+                    logger.warning(f"UserWSS: {self.ws_id}: {msg}")
                     await self.stop()
             logger.debug(f"UserWSSession: WSS receive loop stopped: {self.ws_id}")
         logger.debug(f"get_ws: stopped: {self.ws_id}")
@@ -134,10 +160,9 @@ class UserWSS:
 
         r_id = f"{self.exchange}{method}{int(time.time() * 1000000)}"
 
-        if self.exchange == 'bitfinex':
-            _id = None
+        if self.exchange in ("okx", "bitfinex") and  method == "userDataStream.start":
+            _id = self.ws_id
         else:
-            # Remove all extra symbols and truncate to limit len
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT[self.exchange]:]
 
         # print(f"request id: {_id}")
@@ -155,18 +180,16 @@ class UserWSS:
             pass  # Task cancellation should not be logged as an error
         else:
             # logger.info(f"request: res: {res}")
-            return self._handle_msg_error(res)
+            return res
 
     async def _response_distributor(self, _id):
-        while True:
+        while self.operational_status is not None:
             await self._event.wait()
-
             # print(f"_response_distributor: {self._response_pool.keys()}")
+            if _id in self._response_pool.keys():
+                return self._response_pool.pop(_id)
+        return None
 
-            if self.exchange in ('binance', 'okx') and _id in self._response_pool.keys():
-                res = self._response_pool.pop(_id)
-
-                return res
 
     def compose_request(self, _id, api_key, method, params, signed):
         req = None
@@ -199,16 +222,21 @@ class UserWSS:
             else:
                 req = {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
         elif self.exchange == 'bitfinex':
-            ts = int(time.time() * 1000)
-            data = f"AUTH{ts}"
-            req = {
-                'event': "auth",
-                'apiKey': self._api_key,
-                'authSig': generate_signature(self.exchange, self._api_secret, data),
-                'authPayload': data,
-                'authNonce': ts,
-                'filter': []
-            }
+            if method == "userDataStream.start":
+                ts = int(time.time() * 1000)
+                data = f"AUTH{ts}"
+                req = {
+                    'event': "auth",
+                    'apiKey': self._api_key,
+                    'authSig': generate_signature(self.exchange, self._api_secret, data),
+                    'authPayload': data,
+                    'authNonce': ts,
+                    'filter': ['trading']
+                }
+            else:
+                if method == 'on':
+                    params.update({"meta": {"aff_code": "v_4az2nCP"}})
+                req = [0, method, _id, params]
         return req
 
     async def _keepalive(self, interval=10):
@@ -247,12 +275,14 @@ class UserWSS:
         self.init = None
         await self._ws.close()
 
-    def _handle_msg_error(self, msg):
+    async def _handle_msg(self, msg):
+        logger.info(f"_handle_msg: {msg}")
+
         if self.exchange == 'binance':
+            self._handle_rate_limits(msg.pop('rateLimits', []))
             if msg.get('status') != 200:
-                self.binance_error_handle(msg)
-                return None
-            return msg.get('result')
+                await self.binance_error_handle(msg)
+            return msg
         elif self.exchange == 'okx':
             if msg.get('code') != '0':
                 if msg.get('code') == '63999':
@@ -260,24 +290,45 @@ class UserWSS:
                 elif msg.get('code') == '60014':
                     self._retry_after = int((time.time() + TIMEOUT) * 1000)
                     self.request_limit_reached = True
+                    return msg
                 else:
                     logger.warning(f"Malformed request: status: {msg}")
-                    self.stop()
+                await self.stop()
+            return msg
+        elif self.exchange == 'bitfinex':
+            if isinstance(msg, dict):
+                if msg.get('event') == 'info' and not msg.get('platform', {}).get('status'):
+                    logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
+                    await self.stop()
+                if msg.get('event') == 'info':
+                    if msg.get('version') != 2:
+                        logger.critical('Bitfinex WSS platform: version change detected')
+                    return None
+                if msg.get('code'):
+                    if msg.get('code') == 10305:
+                        logger.warning('UserWSS Bitfinex: Reached limit of open channels')
+                        self._retry_after = int((time.time() + TIMEOUT) * 1000)
+                        self.request_limit_reached = True
+                        return msg
+                    logger.warning(f"Malformed request: status: {msg}")
+                    await self.stop()
+                return msg
+            elif isinstance(msg, list) and len(msg) == 2 and msg[1] == 'hb':
                 return None
-            return msg.get('data', [])
+            elif msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
+                msg = {"id": msg[2][2], "data": [msg[2][0], msg[2][1], None, None, [msg[2][4]] if msg[2][1] == 'on-req' else msg[2][4], None, msg[2][6], msg[2][7]]}
+                return msg
 
-    def binance_error_handle(self, msg):
+    async def binance_error_handle(self, msg):
         error_msg = msg.get('error')
         if msg.get('status') == 403:
-            self.stop()
-            raise UserWarning(error_msg)
-        self._retry_after = error_msg.get('data', {}).get('retryAfter', int((time.time() + TIMEOUT) * 1000))
-        if msg.get('status') == 418:
+            await self.stop()
+        if msg.get('status') in (418, 429):
+            self._retry_after = error_msg.get('data', {}).get('retryAfter', int((time.time() + TIMEOUT) * 1000))
             self.request_limit_reached = True
-            self.stop()
-        elif msg.get('status') == 429:
-            self.request_limit_reached = True
-        logger.error(f"Malformed request: status: {error_msg}")
+        else:
+            logger.error(f"Malformed request: status: {error_msg}")
+            await self.stop()
 
     def _handle_rate_limits(self, rate_limits: []):
         def retry_after():
