@@ -4,7 +4,7 @@
 import aiohttp
 import asyncio
 import shortuuid
-import logging.handlers
+import logging
 import toml
 import contextlib
 
@@ -72,9 +72,9 @@ async def get_time(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error(f"Handling exception: {_ex}")
+        logger.error("Handling exception: %s",_ex)
     else:
-        logger.info(f"Check server time response: {res}")
+        logger.info("Check server time response: %s", res)
 
 
 async def current_average_price(user_session: UserWSSession, _trade_id):
@@ -93,9 +93,9 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error(f"Handling exception: {_ex}")
+        logger.error("Handling exception: %s",_ex)
     else:
-        logger.info(f"Current average price response: {res}")
+        logger.info("Current average price response: %s",res)
 
 
 async def account_information(user_session: UserWSSession, _trade_id):
@@ -112,9 +112,9 @@ async def account_information(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error(f"Handling exception: {_ex}")
+        logger.error("Handling exception: %s",_ex)
     else:
-        logger.info(f"Account information (USER_DATA) response: {res}")
+        logger.info("Account information (USER_DATA) response: %s", res)
 
 
 def get_credentials(_account_name: str) -> ():

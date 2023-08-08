@@ -87,7 +87,6 @@ class UserWSS:
                 msg = await self._ws.receive()
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     res = await self._handle_msg(json.loads(msg.data))
-                    # logger.info(f"get_ws: {self.ws_id}: res: {res}")
                     if res is not None:
                         if self.exchange == 'binance':
                             self._response_pool[res.get('id')] = res.get('result')
@@ -184,10 +183,9 @@ class UserWSS:
     async def _response_distributor(self, _id):
         while self.operational_status is not None:
             await self._event.wait()
-            if _id in self._response_pool.keys():
+            if _id in self._response_pool:
                 return self._response_pool.pop(_id)
         return None
-
 
     def compose_request(self, _id, api_key, method, params, signed):
         req = None
