@@ -5,11 +5,11 @@ import time
 import aiohttp
 import logging
 import json
-from enum import Enum
 import hmac
 import hashlib
 import base64
 
+from enum import Enum
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
 
 
@@ -140,7 +140,7 @@ class UserWSS:
         _t = asyncio.ensure_future(self._keepalive())
         _t.set_name(f"keepalive-{self.ws_id}")
         self.tasks_list.append(_t)
-        logger.info(f"UserWSSession: logged in for {self.ws_id}")
+        logger.info(f"UserWSS: logged in for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
         """
@@ -150,13 +150,13 @@ class UserWSS:
         """
         method = _method or self.method
         if self.request_limit_reached:
-            logger.warning(f"UserWSSession {self.ws_id}: request limit reached, try later")
+            logger.warning(f"UserWSS {self.ws_id}: request limit reached, try later")
             return None
         if method != 'userDataStream.start' and not self.operational_status:
-            logger.warning("UserWSSession operational status is %s", self.operational_status)
+            logger.warning("UserWSS temporary in Out-of-Service state")
             return None
         if method in ('order.place', 'order.cancelReplace', 'order') and not self.order_handling:
-            logger.warning("UserWSSession: exceeded order placement limit, try later")
+            logger.warning("UserWSS: exceeded order placement limit, try later")
             return None
 
         params = _params.copy() if _params else None
@@ -173,7 +173,7 @@ class UserWSS:
         try:
             res = await asyncio.wait_for(self._response_distributor(_id), timeout=TIMEOUT)
         except asyncio.TimeoutError:
-            logger.warning(f"UserWSS get() timeout error: {self.ws_id}")
+            logger.warning(f"UserWSS: get response timeout error: {self.ws_id}")
             await self.stop()
             return None
         except asyncio.CancelledError:
@@ -241,10 +241,10 @@ class UserWSS:
         while self.operational_status is not None:
             if self.request_limit_reached and (int(time.time() * 1000) - self._retry_after >= 0):
                 self.request_limit_reached = False
-                logger.info(f"UserWSSession: request limit reached restored for {self.ws_id}")
+                logger.info(f"UserWSS: request limit reached restored for {self.ws_id}")
             if not self.order_handling and (int(time.time() * 1000) - self._retry_after >= 0):
                 self.order_handling = True
-                logger.info(f"UserWSSession order handling status restored for {self.ws_id}")
+                logger.info(f"UserWSS order handling status restored for {self.ws_id}")
             await asyncio.sleep(interval)
 
     async def heartbeat(self, interval=60 * 30):

@@ -6,6 +6,7 @@ import asyncio
 import shortuuid
 import logging.handlers
 import toml
+import contextlib
 
 from crypto_ws_api import CONFIG_FILE
 from crypto_ws_api.ws_session import UserWSSession
@@ -25,8 +26,7 @@ root_logger.addHandler(sh)
 
 async def main(account_name):
     # Get credentials and create user session
-
-    # Can be omitted if you have credentials
+    # Can be omitted if you have credentials from other source
     exchange, _test_net, api_key, api_secret, passphrase, ws_api_endpoint = get_credentials(account_name)
 
     session = aiohttp.ClientSession()
@@ -44,15 +44,14 @@ async def main(account_name):
 
     # Demo method's calling
     await account_information(user_session, trade_id)
-    asyncio.ensure_future(demo_loop(user_session, get_time, trade_id, 5))
-    # asyncio.ensure_future(demo_loop(user_session, current_average_price, trade_id, 3))
+    asyncio.ensure_future(demo_loop(user_session, get_time, trade_id, 2))
+    asyncio.ensure_future(demo_loop(user_session, current_average_price, trade_id, 3))
 
-    await asyncio.sleep(300)
+    await asyncio.sleep(12)
 
     # Stop user session and close aiohttp session
-    # await user_session.stop()
+    await user_session.stop()
     await session.close()
-    # print(f"Operational status: {user_session.operational_status}")
 
 
 async def demo_loop(_session, _method, _trade_id, delay):
@@ -90,13 +89,13 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
             params,
         )
         if res is None:
-            print("Here handling state Out-of-Service")
+            logger.warning("Here handling state Out-of-Service")
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        print(f"Handling exception: {_ex}")
+        logger.error(f"Handling exception: {_ex}")
     else:
-        print(f"Current average price response: {res}")
+        logger.info(f"Current average price response: {res}")
 
 
 async def account_information(user_session: UserWSSession, _trade_id):
@@ -144,4 +143,5 @@ def _get_credentials(account, config):
 
 if __name__ == '__main__':
     logger.info("INFO logging message from demo.main()")
-    asyncio.run(main('Demo - Binance'))
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(main('Demo - Binance'))
