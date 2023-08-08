@@ -123,19 +123,23 @@ def get_credentials(_account_name: str) -> ():
     accounts = config.get('accounts')
     for account in accounts:
         if account.get('name') == _account_name:
-            exchange = account['exchange']
-            test_net = account['test_net']
-            #
-            api_key = account['api_key']
-            api_secret = account['api_secret']
-            passphrase = account.get('passphrase')
-            #
-            endpoint = config['endpoint'][exchange]
-            #
-            ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
-            #
-            return exchange, test_net, api_key, api_secret, passphrase, ws_api
+            return _get_credentials(account, config)
     raise UserWarning(f"Can't find account '{_account_name}' defined in {CONFIG_FILE}")
+
+
+def _get_credentials(account, config):
+    exchange = account['exchange']
+    test_net = account['test_net']
+    #
+    api_key = account['api_key']
+    api_secret = account['api_secret']
+    passphrase = account.get('passphrase')
+    #
+    endpoint = config['endpoint'][exchange]
+    #
+    ws_api = endpoint.get('ws_api_test') if test_net else endpoint.get('ws_api')
+    #
+    return exchange, test_net, api_key, api_secret, passphrase, ws_api
 
 
 if __name__ == '__main__':

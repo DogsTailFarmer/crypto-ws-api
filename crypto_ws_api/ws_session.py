@@ -3,7 +3,6 @@
 import asyncio
 import time
 import aiohttp
-import contextlib
 import logging
 import json
 from enum import Enum
@@ -57,6 +56,7 @@ class UserWSS:
         "request_limit_reached",
         "_event",
         "_response_pool",
+        "tasks_list",
     )
 
     def __init__(self, session, method, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None):
@@ -78,9 +78,32 @@ class UserWSS:
         self.order_handling = False
         self.request_limit_reached = False
         self._event = asyncio.Event()
+        self.tasks_list = []
 
     async def get_ws(self):
-        self.init = True
+        while self.operational_status is not None:
+            await self._start_wss()
+            while self.operational_status:
+                msg = await self._ws.receive()
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    res = await self._handle_msg(json.loads(msg.data))
+                    # logger.info(f"get_ws: {self.ws_id}: res: {res}")
+                    if res is not None:
+                        if self.exchange == 'binance':
+                            self._response_pool[res.get('id')] = res.get('result')
+                        elif self.exchange == 'okx':
+                            self._response_pool[res.get('id') or self.ws_id] = res.get('data')
+                        elif self.exchange == 'bitfinex':
+                            self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
+                        self._event.set()
+                        self._event.clear()
+                else:
+                    logger.warning(f"UserWSS: {self.ws_id}: {msg}")
+                    await self.stop()
+            logger.debug(f"UserWSS: receive loop stopped: {self.ws_id}")
+        logger.debug(f"UserWSS: ws loop stopped: {self.ws_id}")
+
+    async def _start_wss(self):
         _heartbeat = None
         _receive_timeout = None
         if self.exchange == 'binance':
@@ -89,54 +112,34 @@ class UserWSS:
             _receive_timeout = 30
         elif self.exchange == 'okx':
             _heartbeat = 25
-        while self.operational_status is not None:
-            while self.init:
-                try:
-                    self._ws = await self.session.ws_connect(
-                        self.endpoint,
-                        heartbeat=_heartbeat,
-                        receive_timeout=_receive_timeout
-                    )
-                except aiohttp.ClientError as ex:
-                    logger.warning(f"UserWSS: {ex}")
-                    await asyncio.sleep(TIMEOUT)
-                else:
-                    self.operational_status = True
-                    self.init = False
-                    logger.info(f"UserWSS: started for: {self.ws_id}")
-            while self.operational_status:
-                msg = await self._ws.receive()
-                logger.info(f"get_ws: {self.ws_id}: msg: {msg}")
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    res = await self._handle_msg(json.loads(msg.data))
-
-                    if self.exchange == 'binance':
-                        self._response_pool[res.get('id')] = res.get('result')
-                    elif self.exchange == 'okx':
-                        self._response_pool[res.get('id') or self.ws_id] = res.get('data')
-                    elif self.exchange == 'bitfinex':
-                        logger.info(f"get_ws: {self.ws_id}: res: {res}")
-                        if res is not None:
-                            self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
-
-                    self._event.set()
-                    self._event.clear()
-
-                else:
-                    logger.warning(f"UserWSS: {self.ws_id}: {msg}")
-                    await self.stop()
-            logger.debug(f"UserWSSession: WSS receive loop stopped: {self.ws_id}")
-        logger.debug(f"get_ws: stopped: {self.ws_id}")
+        while self.init:
+            try:
+                self._ws = await self.session.ws_connect(
+                    self.endpoint,
+                    heartbeat=_heartbeat,
+                    receive_timeout=_receive_timeout
+                )
+            except aiohttp.ClientError as ex:
+                logger.warning(f"UserWSS: {ex}")
+                await asyncio.sleep(TIMEOUT)
+            else:
+                self.operational_status = True
+                self.init = False
+                logger.info(f"UserWSS: started for: {self.ws_id}")
 
     async def ws_login(self):
         res = await self.request('userDataStream.start', _api_key=True)
         if self.exchange == 'binance' and res:
             self._listen_key = res.get('listenKey')
-            asyncio.ensure_future(self.heartbeat())
+            _t = asyncio.ensure_future(self.heartbeat())
+            _t.set_name(f"heartbeat-{self.ws_id}")
+            self.tasks_list.append(_t)
         else:
             self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
         self.order_handling = True
-        asyncio.ensure_future(self._keepalive())
+        _t = asyncio.ensure_future(self._keepalive())
+        _t.set_name(f"keepalive-{self.ws_id}")
+        self.tasks_list.append(_t)
         logger.info(f"UserWSSession: logged in for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
@@ -164,9 +167,6 @@ class UserWSS:
             _id = self.ws_id
         else:
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT[self.exchange]:]
-
-        # print(f"request id: {_id}")
-
         await self._ws.send_json(
             self.compose_request(_id, _api_key, method, params, _signed)
         )
@@ -179,13 +179,11 @@ class UserWSS:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         else:
-            # logger.info(f"request: res: {res}")
             return res
 
     async def _response_distributor(self, _id):
         while self.operational_status is not None:
             await self._event.wait()
-            # print(f"_response_distributor: {self._response_pool.keys()}")
             if _id in self._response_pool.keys():
                 return self._response_pool.pop(_id)
         return None
@@ -240,44 +238,41 @@ class UserWSS:
         return req
 
     async def _keepalive(self, interval=10):
-        with contextlib.suppress(asyncio.CancelledError):
+        while self.operational_status is not None:
+            if self.request_limit_reached and (int(time.time() * 1000) - self._retry_after >= 0):
+                self.request_limit_reached = False
+                logger.info(f"UserWSSession: request limit reached restored for {self.ws_id}")
+            if not self.order_handling and (int(time.time() * 1000) - self._retry_after >= 0):
+                self.order_handling = True
+                logger.info(f"UserWSSession order handling status restored for {self.ws_id}")
             await asyncio.sleep(interval)
-            while self.operational_status is not None:
-                if self.request_limit_reached and (int(time.time() * 1000) - self._retry_after >= 0):
-                    self.request_limit_reached = False
-                    logger.info(f"UserWSSession: request limit reached restored for {self.ws_id}")
-                if not self.order_handling and (int(time.time() * 1000) - self._retry_after >= 0):
-                    self.order_handling = True
-                    logger.info(f"UserWSSession order handling status restored for {self.ws_id}")
-                await asyncio.sleep(interval)
 
     async def heartbeat(self, interval=60 * 30):
         params = {
             "listenKey": self._listen_key,
         }
-        with contextlib.suppress(asyncio.CancelledError):
+        while self.operational_status is not None:
+            await self.request(
+                "userDataStream.ping",
+                params,
+                _api_key=True,
+            )
             await asyncio.sleep(interval)
-            while self.operational_status is not None:
-                await self.request(
-                    "userDataStream.ping",
-                    params,
-                    _api_key=True,
-                )
-                await asyncio.sleep(interval)
 
     async def stop(self):
         """
         Stop data stream
         """
-        logger.info("STOP User WSS for %s", self.ws_id)
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
         self.init = None
-        await self._ws.close()
+        [task.cancel() for task in self.tasks_list if not task.done()]
+        self.tasks_list.clear()
+        if self._ws and not self._ws.closed:
+            await self._ws.close()
+        logger.info("User WSS for %s stopped", self.ws_id)
 
     async def _handle_msg(self, msg):
-        logger.info(f"_handle_msg: {msg}")
-
         if self.exchange == 'binance':
             self._handle_rate_limits(msg.pop('rateLimits', []))
             if msg.get('status') != 200:
@@ -285,39 +280,56 @@ class UserWSS:
             return msg
         elif self.exchange == 'okx':
             if msg.get('code') != '0':
-                if msg.get('code') == '63999':
-                    logger.warning(f"An issue occurred on exchange's side: {msg}")
-                elif msg.get('code') == '60014':
+                await self.okx_error_handle(msg)
+            return msg
+        elif self.exchange == 'bitfinex':
+            return await self.bitfinex_error_handle(msg)
+
+    async def bitfinex_error_handle(self, msg):
+        if isinstance(msg, dict):
+            if msg.get('event') == 'info' and not msg.get('platform', {}).get('status'):
+                logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
+                await self.stop()
+            if msg.get('event') == 'info':
+                if msg.get('version') != 2:
+                    logger.critical('Bitfinex WSS platform: version change detected')
+                return None
+            if msg.get('code'):
+                if msg.get('code') == 10305:
+                    logger.warning('UserWSS Bitfinex: Reached limit of open channels')
                     self._retry_after = int((time.time() + TIMEOUT) * 1000)
                     self.request_limit_reached = True
                     return msg
-                else:
-                    logger.warning(f"Malformed request: status: {msg}")
+                logger.warning(f"Malformed request: status: {msg}")
                 await self.stop()
             return msg
-        elif self.exchange == 'bitfinex':
-            if isinstance(msg, dict):
-                if msg.get('event') == 'info' and not msg.get('platform', {}).get('status'):
-                    logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
-                    await self.stop()
-                if msg.get('event') == 'info':
-                    if msg.get('version') != 2:
-                        logger.critical('Bitfinex WSS platform: version change detected')
-                    return None
-                if msg.get('code'):
-                    if msg.get('code') == 10305:
-                        logger.warning('UserWSS Bitfinex: Reached limit of open channels')
-                        self._retry_after = int((time.time() + TIMEOUT) * 1000)
-                        self.request_limit_reached = True
-                        return msg
-                    logger.warning(f"Malformed request: status: {msg}")
-                    await self.stop()
-                return msg
-            elif isinstance(msg, list) and len(msg) == 2 and msg[1] == 'hb':
-                return None
-            elif msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
-                msg = {"id": msg[2][2], "data": [msg[2][0], msg[2][1], None, None, [msg[2][4]] if msg[2][1] == 'on-req' else msg[2][4], None, msg[2][6], msg[2][7]]}
-                return msg
+        elif isinstance(msg, list) and len(msg) == 2 and msg[1] == 'hb':
+            return None
+        elif msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
+            msg = {"id": msg[2][2],
+                   "data": [msg[2][0],
+                            msg[2][1],
+                            None,
+                            None,
+                            [msg[2][4]] if msg[2][1] == 'on-req' else msg[2][4],
+                            None,
+                            msg[2][6],
+                            msg[2][7]
+                            ]
+                   }
+            return msg
+
+    async def okx_error_handle(self, msg):
+        if msg.get('code') == '1':
+            logger.warning(f"Operation failed: {msg}")
+        elif msg.get('code') == '63999':
+            logger.warning(f"An issue occurred on exchange's side: {msg}")
+        elif msg.get('code') == '60014':
+            self._retry_after = int((time.time() + TIMEOUT) * 1000)
+            self.request_limit_reached = True
+        else:
+            logger.warning(f"Malformed request: status: {msg}")
+            await self.stop()
 
     async def binance_error_handle(self, msg):
         error_msg = msg.get('error')
@@ -391,14 +403,17 @@ class UserWSSession:
         )
         _init = None
         if user_wss.init is None:
+            user_wss.init = True
             _init = True
             user_wss.operational_status = False
             asyncio.ensure_future(user_wss.get_ws())
         else:
             while not (user_wss.operational_status and user_wss.order_handling):
                 await asyncio.sleep(0.1)
+
         while user_wss.init is None or user_wss.init:
             await asyncio.sleep(0.1)
+
         if _init:
             await user_wss.ws_login()
             while not user_wss.order_handling:
