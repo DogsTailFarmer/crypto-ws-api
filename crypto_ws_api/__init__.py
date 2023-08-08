@@ -5,7 +5,7 @@ Crypto WS API connector for ASYNC requests
 https://developers.binance.com/docs/binance-trading-api/websocket_api#general-api-information
 Provides methods of connection management, keepalive and rate limits control
 Full coverage of all methods provided by the interface
-For crypto exchanges: +Binance, -OKX, -Bitfinex,
+For crypto exchanges: Binance, OKX, Bitfinex,
 """
 __authors__ = ["Jerry Fedorenko"]
 __license__ = "MIT"
@@ -13,7 +13,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.0.0rc1"
+__version__ = "2.0.0rc2"
 
 from pathlib import Path
 import shutil
