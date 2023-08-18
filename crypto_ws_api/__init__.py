@@ -5,7 +5,7 @@ Crypto WS API connector for ASYNC requests
 https://developers.binance.com/docs/binance-trading-api/websocket_api#general-api-information
 Provides methods of connection management, keepalive and rate limits control
 Full coverage of all methods provided by the interface
-For crypto exchanges: +Binance, -OKX, -Bitfinex,
+For crypto exchanges: Binance, OKX, Bitfinex,
 """
 __authors__ = ["Jerry Fedorenko"]
 __license__ = "MIT"
@@ -13,14 +13,20 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.0.1b3"
+__version__ = "2.0.1b4"
 
 from pathlib import Path
 import shutil
 from platformdirs import user_config_path
 
 
-TIMEOUT = 10  # sec timeout for WSS receive
+TIMEOUT = 5  # sec timeout for WSS receive
+# Maximum str size for unique query ID
+ID_LEN_LIMIT = {
+    "binance": 36,
+    "okx": 32,
+    "bitfinex": 32,
+}
 
 CONFIG_PATH = user_config_path("crypto_ws_api")
 CONFIG_FILE = Path(CONFIG_PATH, "ws_api.toml")
