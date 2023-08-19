@@ -1,3 +1,7 @@
+## v2.0.1b5 - 2023-07-18
+### Fix
+* [ RuntimeError: dictionary changed size during iteration #1 ](https://github.com/DogsTailFarmer/crypto-ws-api/issues/1#issue-1857274697)
+
 ## 2.0.0rc1 - 2023-08-08
 ### Added for new features
 * Bitfinex implemented
