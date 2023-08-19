@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import asyncio
+import gc
 import time
 import aiohttp
 import logging
@@ -8,12 +9,15 @@ import json
 import hmac
 import hashlib
 import base64
+import string
+import random
 
 from enum import Enum
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
 
 
 logger = logging.getLogger(__name__)
+ALPHABET = string.ascii_letters + string.digits
 
 
 def generate_signature(exchange, api_secret, data):
@@ -160,9 +164,9 @@ class UserWSS:
 
         params = _params.copy() if _params else None
 
-        r_id = f"{self.exchange}{method}{int(time.time() * 1000000)}"
+        r_id = f"{self.exchange}{method}{''.join(random.choices(ALPHABET, k=8))}"
 
-        if self.exchange in ("okx", "bitfinex") and  method == "userDataStream.start":
+        if self.exchange in ("okx", "bitfinex") and method == "userDataStream.start":
             _id = self.ws_id
         else:
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT[self.exchange]:]
@@ -268,6 +272,7 @@ class UserWSS:
         self.tasks_list.clear()
         if self._ws and not self._ws.closed:
             await self._ws.close()
+        gc.collect()
         logger.info("User WSS for %s stopped", self.ws_id)
 
     async def _handle_msg(self, msg):
@@ -424,5 +429,7 @@ class UserWSSession:
             return res
 
     async def stop(self):
-        for ws in self.user_wss.values():
+        user_wss_copy = dict(self.user_wss)
+        for ws in user_wss_copy.values():
             await ws.stop()
+        self.user_wss.clear()
