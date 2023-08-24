@@ -11,7 +11,6 @@ import contextlib
 from crypto_ws_api import CONFIG_FILE
 from crypto_ws_api.ws_session import UserWSSession
 
-
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
 #
@@ -64,15 +63,15 @@ async def get_time(user_session: UserWSSession, _trade_id):
     # https://developers.binance.com/docs/binance-trading-api/websocket_api#check-server-time
     try:
         res = await user_session.handle_request(
-                _trade_id,
-                "time",
-            )
+            _trade_id,
+            "time",
+        )
         if res is None:
             logger.warning("Here handling state Out-of-Service")
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s",_ex)
+        logger.error("Handling exception: %s", _ex)
     else:
         logger.info("Check server time response: %s", res)
 
@@ -93,9 +92,9 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s",_ex)
+        logger.error("Handling exception: %s", _ex)
     else:
-        logger.info("Current average price response: %s",res)
+        logger.info("Current average price response: %s", res)
 
 
 async def account_information(user_session: UserWSSession, _trade_id):
@@ -112,7 +111,7 @@ async def account_information(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s",_ex)
+        logger.error("Handling exception: %s", _ex)
     else:
         logger.info("Account information (USER_DATA) response: %s", res)
 
