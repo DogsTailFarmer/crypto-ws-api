@@ -11,6 +11,7 @@ import hashlib
 import base64
 import string
 import random
+import websockets.client
 
 from enum import Enum
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
