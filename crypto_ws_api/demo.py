@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import aiohttp
 import asyncio
 import shortuuid
 import logging
@@ -29,12 +28,9 @@ async def main(account_name):
     # Can be omitted if you have credentials from other source
     exchange, _test_net, api_key, api_secret, passphrase, ws_api_endpoint = get_credentials(account_name)
 
-    session = aiohttp.ClientSession()
-
     trade_id = shortuuid.uuid()
 
     user_session = UserWSSession(
-        session,
         exchange,
         ws_api_endpoint,
         api_key,
@@ -47,17 +43,15 @@ async def main(account_name):
     asyncio.ensure_future(demo_loop(user_session, get_time, trade_id, 2))
     asyncio.ensure_future(demo_loop(user_session, current_average_price, trade_id, 3))
 
-    await asyncio.sleep(12)
-
-    # Stop user session and close aiohttp session
-    await user_session.stop()
-    await session.close()
+    await asyncio.sleep(20)
 
 
 async def demo_loop(_session, _method, _trade_id, delay):
-    for _ in range(60):
+    for _ in range(5):
         await _method(_session, _trade_id)
         await asyncio.sleep(delay)
+    # Stop user session
+    await _session.stop()
 
 
 async def get_time(user_session: UserWSSession, _trade_id):
@@ -72,7 +66,7 @@ async def get_time(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s",_ex)
+        logger.error("Handling exception: %s", _ex)
     else:
         logger.info("Check server time response: %s", res)
 
@@ -93,9 +87,9 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s",_ex)
+        logger.error("Handling exception: %s", _ex)
     else:
-        logger.info("Current average price response: %s",res)
+        logger.info("Current average price response: %s", res)
 
 
 async def account_information(user_session: UserWSSession, _trade_id):
@@ -112,7 +106,7 @@ async def account_information(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s",_ex)
+        logger.error("Handling exception: %s", _ex)
     else:
         logger.info("Account information (USER_DATA) response: %s", res)
 
