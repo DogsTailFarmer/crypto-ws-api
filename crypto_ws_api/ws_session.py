@@ -353,6 +353,7 @@ class UserWSSession:
         "_api_secret",
         "_passphrase",
         "user_wss",
+        "last_init_time",
     )
 
     def __init__(self, exchange, endpoint, api_key, api_secret, passphrase=None):
@@ -365,6 +366,7 @@ class UserWSSession:
         self._api_secret = api_secret
         self._passphrase = passphrase
         self.user_wss = {}
+        self.last_init_time = 0
 
     async def handle_request(
             self,
@@ -392,6 +394,10 @@ class UserWSSession:
             user_wss.init = True
             _init = True
             user_wss.operational_status = False
+            # Calculate delay if the next init call is less than 1 second
+            delay = max(0.0, self.last_init_time + 1 - time.time())
+            await asyncio.sleep(delay)
+            self.last_init_time = time.time()
             asyncio.ensure_future(user_wss.start_wss())
         else:
             while not (user_wss.operational_status and user_wss.order_handling):
