@@ -1,3 +1,11 @@
+## v2.0.2 - 2023-09-19
+### Added for new features
+* Managed delay added for new connection
+
+## v2.0.1b6 - 2023-09-15
+### Update
+* Migrated from aiohttp.ws_connection to websockets.client
+
 ## v2.0.1 - 2023-08-24
 ### Update
 * Some minor fixes
