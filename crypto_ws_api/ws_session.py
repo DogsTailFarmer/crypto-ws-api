@@ -47,6 +47,7 @@ class RateLimitInterval(Enum):
 class UserWSS:
     __slots__ = (
         "init",
+        "login",
         "method",
         "exchange",
         "endpoint",
@@ -67,6 +68,7 @@ class UserWSS:
 
     def __init__(self, method, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None):
         self.init = None
+        self.login = None
         self.method = method
         self.exchange = exchange
         self.endpoint = endpoint
@@ -111,9 +113,13 @@ class UserWSS:
             except websockets.ConnectionClosed as ex:
                 if ex.code == 4000:
                     self.operational_status = None
+                    self.login = None
                     logger.info(f"WSS closed for {self.ws_id}")
                     break
                 else:
+                    [task.cancel() for task in self.tasks_list if not task.done()]
+                    self.tasks_list.clear()
+                    self.login = True
                     logger.warning(f"Restart WSS for {self.ws_id}")
                     continue
             except Exception as ex:
@@ -133,6 +139,7 @@ class UserWSS:
         _t = asyncio.ensure_future(self._keepalive())
         _t.set_name(f"keepalive-{self.ws_id}")
         self.tasks_list.append(_t)
+        self.login = False
         logger.info(f"UserWSS: logged in for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
@@ -353,7 +360,6 @@ class UserWSSession:
         "_api_secret",
         "_passphrase",
         "user_wss",
-        "last_init_time",
     )
 
     def __init__(self, exchange, endpoint, api_key, api_secret, passphrase=None):
@@ -366,7 +372,6 @@ class UserWSSession:
         self._api_secret = api_secret
         self._passphrase = passphrase
         self.user_wss = {}
-        self.last_init_time = 0
 
     async def handle_request(
             self,
@@ -389,15 +394,10 @@ class UserWSSession:
                 self._passphrase
             )
         )
-        _init = None
         if user_wss.init is None:
             user_wss.init = True
-            _init = True
+            user_wss.login = True
             user_wss.operational_status = False
-            # Calculate delay if the next init call is less than 1 second
-            delay = max(0.0, self.last_init_time + 1 - time.time())
-            await asyncio.sleep(delay)
-            self.last_init_time = time.time()
             asyncio.ensure_future(user_wss.start_wss())
         else:
             while not (user_wss.operational_status and user_wss.order_handling):
@@ -406,10 +406,8 @@ class UserWSSession:
         while user_wss.init is None or user_wss.init:
             await asyncio.sleep(0.1)
 
-        if _init:
+        if user_wss.login:
             await user_wss.ws_login()
-            while not user_wss.order_handling:
-                await asyncio.sleep(0.1)
         try:
             res = await user_wss.request(_params=_params, _api_key=_api_key, _signed=_signed)
         except asyncio.CancelledError:
