@@ -112,8 +112,6 @@ class UserWSS:
                 await self._ws_listener()
             except websockets.ConnectionClosed as ex:
                 if ex.code == 4000:
-                    self.operational_status = None
-                    self.login = None
                     logger.info(f"WSS closed for {self.ws_id}")
                     break
                 else:
@@ -134,12 +132,12 @@ class UserWSS:
             self.tasks_list.append(_t)
         else:
             self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
+        self.login = False
         self.operational_status = True
         self.order_handling = True
         _t = asyncio.ensure_future(self._keepalive())
         _t.set_name(f"keepalive-{self.ws_id}")
         self.tasks_list.append(_t)
-        self.login = False
         logger.info(f"UserWSS: logged in for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
@@ -262,6 +260,7 @@ class UserWSS:
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
         self.init = None
+        self.login = None
         [task.cancel() for task in self.tasks_list if not task.done()]
         self.tasks_list.clear()
         if self._ws and not self._ws.closed:
@@ -403,11 +402,12 @@ class UserWSSession:
             while not (user_wss.operational_status and user_wss.order_handling):
                 await asyncio.sleep(0.1)
 
-        while user_wss.init is None or user_wss.init:
+        while user_wss.init:
             await asyncio.sleep(0.1)
 
         if user_wss.login:
             await user_wss.ws_login()
+
         try:
             res = await user_wss.request(_params=_params, _api_key=_api_key, _signed=_signed)
         except asyncio.CancelledError:
