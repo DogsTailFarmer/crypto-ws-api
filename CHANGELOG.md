@@ -1,3 +1,11 @@
+## 2.0.2.post1.dev2
+### Fix
+* Bitfinex: [2023-09-22 08:06:28,268: WARNING] Malformed request: status: {'event': 'error', 'msg': 'auth: dup', 'code': 10100}
+
+## 2.0.2.post1.dev1
+### Fix
+* [OKX: Send request before log in when restart WS](https://github.com/DogsTailFarmer/crypto-ws-api/issues/2#issue-1906963265)
+
 ## v2.0.2 - 2023-09-19
 ### Added for new features
 * Managed delay added for new connection
