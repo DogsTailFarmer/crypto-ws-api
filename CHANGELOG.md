@@ -1,3 +1,10 @@
+## 2.0.3 - 2023-09-30
+### Fix
+* Fixed synchronization problems with multiple connection opening and registration
+
+### Update
+* Error handling: some improvements
+
 ## 2.0.2.post1.dev2
 ### Fix
 * Bitfinex: [2023-09-22 08:06:28,268: WARNING] Malformed request: status: {'event': 'error', 'msg': 'auth: dup', 'code': 10100}
