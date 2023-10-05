@@ -31,6 +31,8 @@ def generate_signature(exchange, api_secret, data):
         sig = base64.b64encode(sig).decode()
     elif exchange == 'binance_ws':
         sig = hmac.new(api_secret.encode("ascii"), data.encode("ascii"), hashlib.sha256).hexdigest()
+    elif exchange == 'bybit':
+        sig = hmac.new(bytes(api_secret.encode("utf-8")), data.encode("utf-8"), hashlib.sha256).hexdigest()
     else:
         sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
     return sig
