@@ -13,9 +13,10 @@ import string
 import random
 import websockets.client
 
-from enum import Enum
-from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT
+from websockets import ConnectionClosed
 
+from enum import Enum
+from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT, DELAY
 
 logger_ws = logger = logging.getLogger(__name__)
 logger_ws.level = logging.INFO
@@ -95,9 +96,7 @@ class UserWSS:
                 if res is not None:
                     if self.exchange == 'binance':
                         self._response_pool[res.get('id')] = res.get('result')
-                    elif self.exchange == 'okx':
-                        self._response_pool[res.get('id') or self.ws_id] = res.get('data')
-                    elif self.exchange == 'bitfinex':
+                    elif self.exchange in ['okx', 'bitfinex']:
                         self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
                     self.in_event.set()
                     await asyncio.sleep(0)
@@ -109,7 +108,7 @@ class UserWSS:
         async for self._ws in websockets.client.connect(self.endpoint, logger=logger_ws):
             try:
                 await self._ws_listener()
-            except websockets.ConnectionClosed as ex:
+            except ConnectionClosed as ex:
                 if ex.code == 4000:
                     logger.info(f"WSS closed for {self.ws_id}")
                     break
@@ -123,19 +122,22 @@ class UserWSS:
 
     async def ws_login(self):
         res = await self.request('userDataStream.start', _api_key=True)
-        if self.exchange == 'binance' and res:
-            self._listen_key = res.get('listenKey')
-            _t = asyncio.ensure_future(self.heartbeat())
-            _t.set_name(f"heartbeat-{self.ws_id}")
+        if res is not None:
+            if self.exchange == 'binance':
+                self._listen_key = res.get('listenKey')
+                _t = asyncio.ensure_future(self.heartbeat())
+                _t.set_name(f"heartbeat-{self.ws_id}")
+                self.tasks_list.append(_t)
+            else:
+                self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
+            self.operational_status = True
+            self.order_handling = True
+            _t = asyncio.ensure_future(self._keepalive())
+            _t.set_name(f"keepalive-{self.ws_id}")
             self.tasks_list.append(_t)
+            logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
         else:
-            self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
-        self.operational_status = True
-        self.order_handling = True
-        _t = asyncio.ensure_future(self._keepalive())
-        _t.set_name(f"keepalive-{self.ws_id}")
-        self.tasks_list.append(_t)
-        logger.info(f"UserWSS: logged in for {self.ws_id}")
+            logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
         """
@@ -369,12 +371,12 @@ class UserWSSession:
         self.user_wss = {}
 
     async def handle_request(
-            self,
-            trade_id: str,
-            method: str,
-            _params=None,
-            _api_key=False,
-            _signed=False,
+        self,
+        trade_id: str,
+        method: str,
+        _params=None,
+        _api_key=False,
+        _signed=False,
     ):
         ws_id = f"{self.exchange}-{trade_id}-{method}"
         user_wss = self.user_wss.setdefault(
@@ -389,23 +391,36 @@ class UserWSSession:
                 self._passphrase
             )
         )
+
+        duration = 0
+
         if user_wss.init is None:
             user_wss.init = True
             user_wss.operational_status = False
             asyncio.ensure_future(user_wss.start_wss())
             while user_wss.init:
-                await asyncio.sleep(0.1)
+                if duration > TIMEOUT:
+                    return None
+                await asyncio.sleep(DELAY)
+                duration += DELAY
             await user_wss.ws_login()
         else:
             while not (user_wss.operational_status and user_wss.order_handling):
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(DELAY)
+                if duration > TIMEOUT:
+                    return None
+                duration += DELAY
 
         try:
-            res = await user_wss.request(_params=_params, _api_key=_api_key, _signed=_signed)
+            return await user_wss.request(
+                _params=_params, _api_key=_api_key, _signed=_signed
+            )
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
-        else:
-            return res
+        except Exception as ex:
+            logger.error(f"crypto_ws_api.ws_session.handle_request(): {ex}")
+
+        return None
 
     async def stop(self):
         user_wss_copy = dict(self.user_wss)

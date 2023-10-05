@@ -1,3 +1,7 @@
+## 2.0.3.post1 - 2023-10-05
+### Fix
+* Timeout killed an infinite loop of waiting for a connection, gives a quick response to use the REST API alternative
+
 ## 2.0.3 - 2023-09-30
 ### Fix
 * Fixed synchronization problems with multiple connection opening and registration
