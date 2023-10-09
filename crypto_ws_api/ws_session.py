@@ -69,7 +69,7 @@ class UserWSS:
     )
 
     def __init__(self, method, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None):
-        self.init = None
+        self.init = True
         self.method = method
         self.exchange = exchange
         self.endpoint = endpoint
@@ -89,12 +89,16 @@ class UserWSS:
         self.tasks_list = []
 
     async def _ws_listener(self):
-        self.init = False
+        asyncio.ensure_future(self.ws_login())
         async for msg in self._ws:
+            # logger.info(f"_ws_listener: msg: {self.ws_id}: {msg}")
             if isinstance(msg, str):
                 res = await self._handle_msg(json.loads(msg))
-                if res is not None:
-                    if self.exchange == 'binance':
+                # logger.info(f"_ws_listener: res: {self.ws_id}: {res}")
+                if res != 'pass':
+                    if res is None:
+                        self._response_pool[f"NoneResponse{self.ws_id}"] = None
+                    elif self.exchange == 'binance':
                         self._response_pool[res.get('id')] = res.get('result')
                     elif self.exchange in ['okx', 'bitfinex']:
                         self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
@@ -113,6 +117,7 @@ class UserWSS:
                     logger.info(f"WSS closed for {self.ws_id}")
                     break
                 else:
+                    self.operational_status = False
                     [task.cancel() for task in self.tasks_list if not task.done()]
                     self.tasks_list.clear()
                     logger.warning(f"Restart WSS for {self.ws_id}")
@@ -122,7 +127,9 @@ class UserWSS:
 
     async def ws_login(self):
         res = await self.request('userDataStream.start', _api_key=True)
-        if res is not None:
+        if res is None:
+            logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
+        else:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')
                 _t = asyncio.ensure_future(self.heartbeat())
@@ -136,8 +143,6 @@ class UserWSS:
             _t.set_name(f"keepalive-{self.ws_id}")
             self.tasks_list.append(_t)
             logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
-        else:
-            logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
         """
@@ -173,6 +178,7 @@ class UserWSS:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         else:
+            # logger.info(f"request: {self.ws_id}: {res}")
             return res
 
     async def _response_distributor(self, _id):
@@ -181,7 +187,8 @@ class UserWSS:
             self.in_event.clear()
             if _id in self._response_pool:
                 return self._response_pool.pop(_id)
-        return None
+            elif f"NoneResponse{self.ws_id}" in self._response_pool:
+                return self._response_pool.pop(f"NoneResponse{self.ws_id}", None)
 
     def compose_request(self, _id, api_key, method, params, signed):
         req = None
@@ -259,7 +266,7 @@ class UserWSS:
         """
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
-        self.init = None
+        self.init = True
         [task.cancel() for task in self.tasks_list if not task.done()]
         self.tasks_list.clear()
         if self._ws and not self._ws.closed:
@@ -287,22 +294,20 @@ class UserWSS:
             if msg.get('event') == 'info' and not msg.get('platform', {}).get('status'):
                 logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
                 await self.stop()
-            if msg.get('event') == 'info':
-                if msg.get('version') != 2:
-                    logger.critical('Bitfinex WSS platform: version change detected')
-                return None
+            if msg.get('event') == 'auth' and msg.get('status') == "OK":
+                return msg
+            if msg.get('event') == 'info' and msg.get('version') != 2:
+                logger.critical('Bitfinex WSS platform: version change detected')
             # sourcery skip: merge-nested-ifs
             if msg.get('code'):
                 if msg.get('code') == 10305:
                     logger.warning('UserWSS Bitfinex: Reached limit of open channels')
                     self._retry_after = int((time.time() + TIMEOUT) * 1000)
                     self.request_limit_reached = True
-                logger.warning(f"Malformed request: status: {msg}")
+                logger.warning(f"Malformed request for {self.ws_id}: {msg}")
                 return None
-            return msg
-        elif isinstance(msg, list) and len(msg) == 2 and msg[1] == 'hb':
-            return None
-        elif msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
+            return 'pass'
+        elif isinstance(msg, list) and msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
             msg = {"id": msg[2][2],
                    "data": [msg[2][0],
                             msg[2][1],
@@ -315,6 +320,8 @@ class UserWSS:
                             ]
                    }
             return msg
+        else:
+            return 'pass'
 
     async def okx_error_handle(self, msg):
         if msg.get('code') == '1':
@@ -328,13 +335,12 @@ class UserWSS:
 
     async def binance_error_handle(self, msg):
         error_msg = msg.get('error')
+        logger.error(f"Malformed request: status: {error_msg}")
         if msg.get('status') == 403:
             await self.stop()
         if msg.get('status') in (418, 429):
             self._retry_after = error_msg.get('data', {}).get('retryAfter', int((time.time() + TIMEOUT) * 1000))
             self.request_limit_reached = True
-        else:
-            logger.error(f"Malformed request: status: {error_msg}")
 
     def _handle_rate_limits(self, rate_limits: []):
         def retry_after():
@@ -392,29 +398,20 @@ class UserWSSession:
             )
         )
 
-        duration = 0
-
-        if user_wss.init is None:
-            user_wss.init = True
+        if user_wss.init:
+            user_wss.init = False
             user_wss.operational_status = False
             asyncio.ensure_future(user_wss.start_wss())
-            while user_wss.init:
-                if duration > TIMEOUT:
-                    return None
-                await asyncio.sleep(DELAY)
-                duration += DELAY
-            await user_wss.ws_login()
-        else:
-            while not (user_wss.operational_status and user_wss.order_handling):
-                await asyncio.sleep(DELAY)
-                if duration > TIMEOUT:
-                    return None
-                duration += DELAY
+
+        duration = 0
+        while not (user_wss.operational_status and user_wss.order_handling):
+            await asyncio.sleep(DELAY)
+            if duration > TIMEOUT:
+                return None
+            duration += DELAY
 
         try:
-            return await user_wss.request(
-                _params=_params, _api_key=_api_key, _signed=_signed
-            )
+            return await user_wss.request(_params=_params, _api_key=_api_key, _signed=_signed)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
