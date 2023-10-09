@@ -1,3 +1,7 @@
+## 2.0.4 - 2023-10-09
+### Update
+* Refine connection management
+
 ## 2.0.3.post1 - 2023-10-05
 ### Fix
 * Timeout killed an infinite loop of waiting for a connection, gives a quick response to use the REST API alternative

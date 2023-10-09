@@ -92,8 +92,11 @@ class UserWSS:
             # logger.info(f"_ws_listener: msg: {self.ws_id}: {msg}")
             if isinstance(msg, str):
                 res = await self._handle_msg(json.loads(msg))
-                if res is not None:
-                    if self.exchange == 'binance':
+                # logger.info(f"_ws_listener: res: {self.ws_id}: {res}")
+                if res != 'pass':
+                    if res is None:
+                        self._response_pool[f"NoneResponse{self.ws_id}"] = None
+                    elif self.exchange == 'binance':
                         self._response_pool[res.get('id')] = res.get('result')
                     elif self.exchange in ['okx', 'bitfinex']:
                         self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
@@ -182,7 +185,8 @@ class UserWSS:
             self.in_event.clear()
             if _id in self._response_pool:
                 return self._response_pool.pop(_id)
-        return None
+            elif f"NoneResponse{self.ws_id}" in self._response_pool:
+                return self._response_pool.pop(f"NoneResponse{self.ws_id}", None)
 
     def compose_request(self, _id, api_key, method, params, signed):
         req = None
@@ -298,7 +302,7 @@ class UserWSS:
                     logger.warning('UserWSS Bitfinex: Reached limit of open channels')
                     self._retry_after = int((time.time() + TIMEOUT) * 1000)
                     self.request_limit_reached = True
-                logger.warning(f"Malformed request: status: {msg}")
+                logger.warning(f"Malformed request for {self.ws_id}: {msg}")
                 return None
             return 'pass'
         elif isinstance(msg, list) and msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
