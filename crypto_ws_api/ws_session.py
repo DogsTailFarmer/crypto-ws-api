@@ -417,7 +417,6 @@ class UserWSSession:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
             logger.error(f"crypto_ws_api.ws_session.handle_request(): {ex}")
-
         return None
 
     async def stop(self):

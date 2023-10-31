@@ -1,3 +1,7 @@
+## 2.0.5 - 2023-10-31
+### Update
+* Some minor fixes
+
 ## 2.0.4 - 2023-10-09
 ### Update
 * Refine connection management
