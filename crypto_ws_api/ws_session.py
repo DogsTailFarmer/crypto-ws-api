@@ -130,7 +130,7 @@ class UserWSS:
         res = await self.request('userDataStream.start', _api_key=True)
         if res is None:
             logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
-            raise ConnectionClosed
+            raise ConnectionClosed(None, None)
         else:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')
