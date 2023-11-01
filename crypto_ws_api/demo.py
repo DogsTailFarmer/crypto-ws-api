@@ -69,9 +69,9 @@ async def get_time(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error(CONST_2 % _ex)
+        logger.error(CONST_2, _ex)
     else:
-        logger.info("Check server time response: %s" % res)
+        logger.info("Check server time response: %s", res)
 
 
 async def current_average_price(user_session: UserWSSession, _trade_id):
@@ -90,9 +90,9 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error(CONST_2 % _ex)
+        logger.error(CONST_2, _ex)
     else:
-        logger.info("Current average price response: %s" % res)
+        logger.info("Current average price response: %s", res)
 
 
 async def account_information(user_session: UserWSSession, _trade_id):
@@ -109,9 +109,9 @@ async def account_information(user_session: UserWSSession, _trade_id):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error(CONST_2 % _ex)
+        logger.error(CONST_2, _ex)
     else:
-        logger.info("Account information (USER_DATA) response: %s" % res)
+        logger.info("Account information (USER_DATA) response: %s", res)
 
 
 def get_credentials(_account_name: str) -> ():
