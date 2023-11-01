@@ -22,6 +22,7 @@ logger_ws = logger = logging.getLogger(__name__)
 logger_ws.level = logging.INFO
 sys.tracebacklimit = 0
 ALPHABET = string.ascii_letters + string.digits
+CONST_3 = "userDataStream.start"
 
 
 def generate_signature(exchange, api_secret, data):
@@ -163,7 +164,7 @@ class UserWSS:
             return None
         params = _params.copy() if _params else None
         r_id = f"{self.exchange}{method}{''.join(random.choices(ALPHABET, k=8))}"
-        if self.exchange in ("okx", "bitfinex") and method == "userDataStream.start":
+        if self.exchange in ("okx", "bitfinex") and method == CONST_3:
             _id = self.ws_id
         else:
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT[self.exchange]:]
@@ -206,7 +207,7 @@ class UserWSS:
             if params:
                 req["params"] = params
         elif self.exchange == "okx":
-            if method == "userDataStream.start":
+            if method == CONST_3:
                 # https://www.okx.com/docs-v5/en/?python#overview-websocket-connect
                 ts = int(time.time())
                 signature_payload = f"{ts}GET/users/self/verify"
@@ -222,7 +223,7 @@ class UserWSS:
             else:
                 req = {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
         elif self.exchange == 'bitfinex':
-            if method == "userDataStream.start":
+            if method == CONST_3:
                 ts = int(time.time() * 1000)
                 data = f"AUTH{ts}"
                 req = {

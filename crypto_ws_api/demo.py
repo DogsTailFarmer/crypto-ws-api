@@ -22,6 +22,10 @@ root_logger.setLevel(logging.DEBUG)
 root_logger.addHandler(sh)
 
 
+CONST_1 = "Here handling state Out-of-Service"
+CONST_2 = "Handling exception: %s"
+
+
 async def main(account_name):
     # Get credentials and create user session
     # Can be omitted if you have credentials from other source
@@ -61,13 +65,13 @@ async def get_time(user_session: UserWSSession, _trade_id):
             "time",
         )
         if res is None:
-            logger.warning("Here handling state Out-of-Service")
+            logger.warning(CONST_1)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s", _ex)
+        logger.error(CONST_2 % _ex)
     else:
-        logger.info("Check server time response: %s", res)
+        logger.info("Check server time response: %s" % res)
 
 
 async def current_average_price(user_session: UserWSSession, _trade_id):
@@ -82,13 +86,13 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
             params,
         )
         if res is None:
-            logger.warning("Here handling state Out-of-Service")
+            logger.warning(CONST_1)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s", _ex)
+        logger.error(CONST_2 % _ex)
     else:
-        logger.info("Current average price response: %s", res)
+        logger.info("Current average price response: %s" % res)
 
 
 async def account_information(user_session: UserWSSession, _trade_id):
@@ -101,13 +105,13 @@ async def account_information(user_session: UserWSSession, _trade_id):
             _signed=True
         )
         if res is None:
-            logger.warning("Here handling state Out-of-Service")
+            logger.warning(CONST_1)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
-        logger.error("Handling exception: %s", _ex)
+        logger.error(CONST_2 % _ex)
     else:
-        logger.info("Account information (USER_DATA) response: %s", res)
+        logger.info("Account information (USER_DATA) response: %s" % res)
 
 
 def get_credentials(_account_name: str) -> ():
