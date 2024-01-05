@@ -1,3 +1,7 @@
+## 2.0.6 - 2024-01-05
+### Update
+* replacing json with ujson to improve performance
+
 ## 2.0.5.post3 - 2023-11-01
 ### Update
 * Dependencies updated

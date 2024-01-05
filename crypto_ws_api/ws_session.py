@@ -5,7 +5,7 @@ import gc
 import sys
 import time
 import logging
-import json
+import ujson as json
 import hmac
 import hashlib
 import base64
