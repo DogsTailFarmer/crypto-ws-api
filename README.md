@@ -202,6 +202,4 @@ If you send a request in this state, the answer will be `None`
 *In any case, you are protected from exceeding limits and blocking for this reason*
 
 ## Donate
-*BNB*, *BUSD*, *USDT* (BEP20) 0x5b52c6ba862b11318616ee6cef64388618318b92
-
-*USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
+*USDT* (TRC20) TU3kagV9kxbjuUmEi6bUym5MTXjeM7Tm8K
