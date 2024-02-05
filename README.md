@@ -17,7 +17,7 @@ For :heavy_check_mark:Binance, :heavy_check_mark:OKX, :heavy_check_mark:Bitfinex
 
 ## Features
 Lightweight and efficient solution to utilize of all available methods** provided through the:
-* [Binance Websocket API v3](https://developers.binance.com/docs/binance-trading-api/websocket_api)
+* [Binance Websocket API v3](https://binance-docs.github.io/apidocs/websocket_api/en)
 * [OKX Websocket API v5](https://www.okx.com/docs-v5/en/#overview-websocket)
 * [Bitfinex Websocket Inputs](https://docs.bitfinex.com/reference/ws-auth-input)
 
