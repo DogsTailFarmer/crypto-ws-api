@@ -1,3 +1,7 @@
+## 2.0.7 - 2024-03-25
+### Update
+* Refactoring and some minor fixes
+
 ## 2.0.6 - 2024-01-05
 ### Update
 * replacing json with ujson to improve performance

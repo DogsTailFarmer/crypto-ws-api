@@ -176,7 +176,6 @@ class UserWSS:
         except asyncio.TimeoutError:
             logger.warning(f"UserWSS: get response timeout error: {self.ws_id}")
             await self.stop()
-            return None
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         else:
@@ -193,52 +192,58 @@ class UserWSS:
                 return self._response_pool.pop(f"NoneResponse{self.ws_id}", None)
 
     def compose_request(self, _id, api_key, method, params, signed):
-        req = None
         if self.exchange == "binance":
-            req = {"id": _id, "method": method}
-            if (api_key or signed) and not params:
-                params = {}
-            if api_key:
-                params["apiKey"] = self._api_key
-            if signed:
-                params["timestamp"] = int(time.time() * 1000)
-                payload = '&'.join(f"{key}={value}" for key, value in dict(sorted(params.items())).items())
-                params["signature"] = generate_signature('binance_ws', self._api_secret, payload)
-            if params:
-                req["params"] = params
+            return self._compose_binance_request(_id, api_key, method, params, signed)
         elif self.exchange == "okx":
-            if method == CONST_3:
-                # https://www.okx.com/docs-v5/en/?python#overview-websocket-connect
-                ts = int(time.time())
-                signature_payload = f"{ts}GET/users/self/verify"
-                signature = generate_signature(self.exchange, self._api_secret, signature_payload)
-                # Login on account
-                req = {"op": 'login',
-                       "args": [{"apiKey": self._api_key,
-                                 "passphrase": self._passphrase,
-                                 "timestamp": ts,
-                                 "sign": signature}
-                                ]
-                       }
-            else:
-                req = {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
+            return self._compose_okx_request(_id, method, params)
         elif self.exchange == 'bitfinex':
-            if method == CONST_3:
-                ts = int(time.time() * 1000)
-                data = f"AUTH{ts}"
-                req = {
-                    'event': "auth",
-                    'apiKey': self._api_key,
-                    'authSig': generate_signature(self.exchange, self._api_secret, data),
-                    'authPayload': data,
-                    'authNonce': ts,
-                    'filter': ['trading']
-                }
-            else:
-                if method == 'on':
-                    params.update({"meta": {"aff_code": "v_4az2nCP"}})
-                req = [0, method, _id, params]
+            return self._compose_bitfinex_request(_id, method, params)
+        else:
+            raise ValueError(f"Unsupported exchange: {self.exchange}")
+
+    def _compose_binance_request(self, _id, api_key, method, params, signed):
+        req = {"id": _id, "method": method}
+        params = params or {}
+        if api_key:
+            params["apiKey"] = self._api_key
+        if signed:
+            params["timestamp"] = int(time.time() * 1000)
+            payload = '&'.join(f"{key}={value}" for key, value in sorted(params.items()))
+            params["signature"] = generate_signature('binance_ws', self._api_secret, payload)
+        if params:
+            req["params"] = params
         return req
+
+    def _compose_okx_request(self, _id, method, params):
+        if method == CONST_3:
+            ts = int(time.time())
+            signature_payload = f"{ts}GET/users/self/verify"
+            signature = generate_signature(self.exchange, self._api_secret, signature_payload)
+            return {
+                "op": 'login',
+                "args": [
+                    {"apiKey": self._api_key, "passphrase": self._passphrase, "timestamp": ts, "sign": signature}
+                ]
+            }
+        else:
+            return {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
+
+    def _compose_bitfinex_request(self, _id, method, params):
+        if method == CONST_3:
+            ts = int(time.time() * 1000)
+            data = f"AUTH{ts}"
+            return {
+                'event': "auth",
+                'apiKey': self._api_key,
+                'authSig': generate_signature(self.exchange, self._api_secret, data),
+                'authPayload': data,
+                'authNonce': ts,
+                'filter': ['trading']
+            }
+        else:
+            if method == 'on':
+                params.update({"meta": {"aff_code": "v_4az2nCP"}})
+            return [0, method, _id, params]
 
     async def _keepalive(self, interval=10):
         while self.operational_status is not None:
@@ -291,39 +296,59 @@ class UserWSS:
         elif self.exchange == 'bitfinex':
             return await self.bitfinex_error_handle(msg)
 
+    #region BitfinexErrorHandle
     async def bitfinex_error_handle(self, msg):
         if isinstance(msg, dict):
-            if msg.get('event') == 'info' and not msg.get('platform', {}).get('status'):
-                logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
-                await self.stop()
-            if msg.get('event') == 'auth' and msg.get('status') == "OK":
-                return msg
-            if msg.get('event') == 'info' and msg.get('version') != 2:
-                logger.critical('Bitfinex WSS platform: version change detected')
-            # sourcery skip: merge-nested-ifs
-            if msg.get('code'):
-                if msg.get('code') == 10305:
-                    logger.warning('UserWSS Bitfinex: Reached limit of open channels')
-                    self._retry_after = int((time.time() + TIMEOUT) * 1000)
-                    self.request_limit_reached = True
-                logger.warning(f"Malformed request for {self.ws_id}: {msg}")
-                return None
-            return 'pass'
+            return await self._handle_dict_message(msg)
         elif isinstance(msg, list) and msg[1] == 'n' and msg[2][1] in ('on-req', 'oc-req', 'oc_multi-req'):
-            msg = {"id": msg[2][2],
-                   "data": [msg[2][0],
-                            msg[2][1],
-                            None,
-                            None,
-                            [msg[2][4]] if msg[2][1] == 'on-req' else msg[2][4],
-                            None,
-                            msg[2][6],
-                            msg[2][7]
-                            ]
-                   }
-            return msg
+            return self._transform_list_message(msg)
         else:
             return 'pass'
+
+    async def _handle_dict_message(self, msg):
+        event = msg.get('event')
+        if event == 'info':
+            return await self._handle_info_event(msg)
+        elif event == 'auth':
+            return msg if msg.get('status') == "OK" else None
+        elif msg.get('code'):
+            return await self._handle_error_code(msg)
+        return 'pass'
+
+    async def _handle_info_event(self, msg):
+        if not msg.get('platform', {}).get('status'):
+            logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
+            await self.stop()
+        elif msg.get('version') != 2:
+            logger.critical('Bitfinex WSS platform: version change detected')
+        return 'pass'
+
+    async def _handle_error_code(self, msg):
+        code = msg.get('code')
+        if code == 10305:
+            logger.warning('UserWSS Bitfinex: Reached limit of open channels')
+            self._retry_after = int((time.time() + TIMEOUT) * 1000)
+            self.request_limit_reached = True
+        else:
+            logger.warning(f"Malformed request for {self.ws_id}: {msg}")
+        return None
+
+    @staticmethod
+    def _transform_list_message(msg):
+        return {
+            "id": msg[2][2],
+            "data": [
+                msg[2][0],
+                msg[2][1],
+                None,
+                None,
+                [msg[2][4]] if msg[2][1] == 'on-req' else msg[2][4],
+                None,
+                msg[2][6],
+                msg[2][7]
+            ]
+        }
+    #endregion
 
     async def okx_error_handle(self, msg):
         if msg.get('code') == '1':
