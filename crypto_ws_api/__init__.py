@@ -13,7 +13,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.0.7"
+__version__ = "2.0.8"
 
 from pathlib import Path
 import shutil
@@ -21,7 +21,7 @@ from platformdirs import user_config_path
 
 
 TIMEOUT = 5  # sec timeout for WSS initialization and get response
-DELAY = 0.1  # sec delay in while loop
+DELAY = 0.1  # sec delay in keepalive loop
 # Maximum str size for unique query ID
 ID_LEN_LIMIT = {
     "binance": 36,

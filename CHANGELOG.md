@@ -1,3 +1,7 @@
+## 2.0.8 - 2024-03-31
+### Fix
+* tons log records: `websockets socket.send() raised exception.`
+
 ## 2.0.7 - 2024-03-25
 ### Update
 * Refactoring and some minor fixes

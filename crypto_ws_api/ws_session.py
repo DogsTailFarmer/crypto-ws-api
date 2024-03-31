@@ -104,7 +104,7 @@ class UserWSS:
                     elif self.exchange in ['okx', 'bitfinex']:
                         self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
                     self.in_event.set()
-                    await asyncio.sleep(0)
+                await asyncio.sleep(0)
             else:
                 logger.warning(f"UserWSS: {self.ws_id}: {msg}")
                 await self.stop()
@@ -171,9 +171,10 @@ class UserWSS:
         await self._ws.send(
             json.dumps(self.compose_request(_id, _api_key, method, params, _signed))
         )
+        await asyncio.sleep(0)
         try:
             res = await asyncio.wait_for(self._response_distributor(_id), timeout=TIMEOUT)
-        except asyncio.TimeoutError:
+        except asyncio.exceptions.TimeoutError:
             logger.warning(f"UserWSS: get response timeout error: {self.ws_id}")
             await self.stop()
         except asyncio.CancelledError:
