@@ -66,7 +66,7 @@ class UserWSS:
         "request_limit_reached",
         "in_event",
         "_response_pool",
-        "tasks_list",
+        "tasks",
     )
 
     def __init__(self, method, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None):
@@ -87,10 +87,17 @@ class UserWSS:
         self.order_handling = False
         self.request_limit_reached = False
         self.in_event = asyncio.Event()
-        self.tasks_list = []
+        self.tasks = set()
+
+    def tasks_manage(self, coro, name=None):
+        _t = asyncio.create_task(coro)
+        if name:
+            _t.set_name(name)
+        self.tasks.add(_t)
+        _t.add_done_callback(self.tasks.discard)
 
     async def _ws_listener(self):
-        asyncio.ensure_future(self.ws_login())
+        self.tasks_manage(self.ws_login())
         async for msg in self._ws:
             # logger.info(f"_ws_listener: msg: {self.ws_id}: {msg}")
             if isinstance(msg, str):
@@ -119,8 +126,8 @@ class UserWSS:
                     break
                 else:
                     self.operational_status = False
-                    [task.cancel() for task in self.tasks_list if not task.done()]
-                    self.tasks_list.clear()
+                    [task.cancel() for task in self.tasks if not task.done()]
+                    self.tasks.clear()
                     logger.warning(f"Restart WSS for {self.ws_id}")
                     continue
             except Exception as ex:
@@ -134,16 +141,12 @@ class UserWSS:
         else:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')
-                _t = asyncio.ensure_future(self.heartbeat())
-                _t.set_name(f"heartbeat-{self.ws_id}")
-                self.tasks_list.append(_t)
+                self.tasks_manage(self.heartbeat(), f"heartbeat-{self.ws_id}")
             else:
                 self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
             self.operational_status = True
             self.order_handling = True
-            _t = asyncio.ensure_future(self._keepalive())
-            _t.set_name(f"keepalive-{self.ws_id}")
-            self.tasks_list.append(_t)
+            self.tasks_manage(self._keepalive(), f"keepalive-{self.ws_id}")
             logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
 
     async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
@@ -275,8 +278,8 @@ class UserWSS:
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
         self.init = True
-        [task.cancel() for task in self.tasks_list if not task.done()]
-        self.tasks_list.clear()
+        [task.cancel() for task in self.tasks if not task.done()]
+        self.tasks.clear()
         if self._ws and not self._ws.closed:
             await self._ws.close(code=4000)
         gc.collect()
@@ -297,7 +300,7 @@ class UserWSS:
         elif self.exchange == 'bitfinex':
             return await self.bitfinex_error_handle(msg)
 
-    #region BitfinexErrorHandle
+    # region BitfinexErrorHandle
     async def bitfinex_error_handle(self, msg):
         if isinstance(msg, dict):
             return await self._handle_dict_message(msg)
@@ -349,7 +352,7 @@ class UserWSS:
                 msg[2][7]
             ]
         }
-    #endregion
+    # endregion
 
     async def okx_error_handle(self, msg):
         if msg.get('code') == '1':
@@ -391,6 +394,7 @@ class UserWSSession:
         "_api_secret",
         "_passphrase",
         "user_wss",
+        "tasks_wss",
     )
 
     def __init__(self, exchange, endpoint, api_key, api_secret, passphrase=None):
@@ -403,6 +407,7 @@ class UserWSSession:
         self._api_secret = api_secret
         self._passphrase = passphrase
         self.user_wss = {}
+        self.tasks_wss = set()
 
     async def handle_request(
         self,
@@ -429,7 +434,9 @@ class UserWSSession:
         if user_wss.init:
             user_wss.init = False
             user_wss.operational_status = False
-            asyncio.ensure_future(user_wss.start_wss())
+            _t = asyncio.create_task(user_wss.start_wss())
+            self.tasks_wss.add(_t)
+            _t.add_done_callback(self.tasks_wss.discard)
 
         duration = 0
         while not (user_wss.operational_status and user_wss.order_handling):
@@ -451,3 +458,5 @@ class UserWSSession:
         for ws in user_wss_copy.values():
             await ws.stop()
         self.user_wss.clear()
+        [task.cancel() for task in self.tasks_wss if not task.done()]
+        self.tasks_wss.clear()

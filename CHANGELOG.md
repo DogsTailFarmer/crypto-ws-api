@@ -1,3 +1,7 @@
+## 2.0.9 - 2024-04-14
+### Fix
+* Creating asynchronous tasks done right
+
 ## 2.0.8 - 2024-03-31
 ### Fix
 * tons log records: `websockets socket.send() raised exception.`
