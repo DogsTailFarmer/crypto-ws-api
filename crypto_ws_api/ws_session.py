@@ -90,9 +90,7 @@ class UserWSS:
         self.tasks = set()
 
     def tasks_manage(self, coro, name=None):
-        _t = asyncio.create_task(coro)
-        if name:
-            _t.set_name(name)
+        _t = asyncio.create_task(coro, name=name)
         self.tasks.add(_t)
         _t.add_done_callback(self.tasks.discard)
 
