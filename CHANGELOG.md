@@ -1,3 +1,7 @@
+## 2.0.10 - 2024-04-19
+### Update
+* Some minor improvement
+
 ## 2.0.9 - 2024-04-14
 ### Fix
 * Creating asynchronous tasks done right
