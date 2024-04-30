@@ -13,13 +13,13 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.0.10"
+__version__ = "2.0.11"
 
 from pathlib import Path
 import shutil
 from platformdirs import user_config_path
 
-
+VERSION = __version__
 TIMEOUT = 5  # sec timeout for WSS initialization and get response
 DELAY = 0.1  # sec delay in keepalive loop
 # Maximum str size for unique query ID
