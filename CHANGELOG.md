@@ -1,3 +1,7 @@
+## 2.0.12 - 2024-06-26
+### Update
+* Dependencies
+
 ## 2.0.11 - 2024-04-30
 ### Update
 * Some minor improvement

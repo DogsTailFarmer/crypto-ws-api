@@ -21,7 +21,7 @@ dependencies = [
     "platformdirs~=3.10.0",
     "toml~=0.10.2",
     "websockets~=12.0",
-    "ujson~=5.9.0"
+    "ujson~=5.10.0"
 ]
 
 [tool.flit.module]
