@@ -1,3 +1,7 @@
+## 2.0.14 - 2024-09-13
+### Update
+* `pyproject.toml`
+
 ## 2.0.13 - 2024-09-13
 ### Update
 * Dependencies

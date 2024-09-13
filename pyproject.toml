@@ -17,10 +17,10 @@ dynamic = ["version", "description"]
 requires-python = ">=3.8"
 
 dependencies = [
-    "shortuuid~=1.0.11",
-    "platformdirs~=3.10.0",
+    "shortuuid~=1.0.13",
+    "platformdirs==3.11.0",
     "toml~=0.10.2",
-    "websockets~=12.0",
+    "websockets==13.0.1",
     "ujson~=5.10.0"
 ]
 
