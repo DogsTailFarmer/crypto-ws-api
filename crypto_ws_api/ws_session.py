@@ -11,8 +11,7 @@ import hashlib
 import base64
 import string
 import random
-import websockets.client
-
+from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
 
 from enum import Enum
@@ -115,11 +114,11 @@ class UserWSS:
                 await self.stop()
 
     async def start_wss(self):
-        async for self._ws in websockets.client.connect(self.endpoint, logger=logger_ws):
+        async for self._ws in connect(self.endpoint, logger=logger_ws):
             try:
                 await self._ws_listener()
             except ConnectionClosed as ex:
-                if ex.code == 4000:
+                if ex.rcvd and ex.rcvd.code == 4000:
                     logger.info(f"WSS closed for {self.ws_id}")
                     break
                 else:
@@ -278,7 +277,7 @@ class UserWSS:
         self.init = True
         [task.cancel() for task in self.tasks if not task.done()]
         self.tasks.clear()
-        if self._ws and not self._ws.closed:
+        if self._ws:
             await self._ws.close(code=4000)
         gc.collect()
         logger.info(f"User WSS for {self.ws_id} stopped")

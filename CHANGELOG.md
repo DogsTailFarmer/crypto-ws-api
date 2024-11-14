@@ -1,3 +1,7 @@
+## 2.0.15 - 2024-11-xx
+### Update
+* `websockets`: bump to v14.1
+
 ## 2.0.14 - 2024-09-13
 ### Update
 * `pyproject.toml`
