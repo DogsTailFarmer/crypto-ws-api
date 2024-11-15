@@ -6,19 +6,21 @@ import sys
 import time
 import logging
 import ujson as json
+from ujson import JSONDecodeError
 import hmac
 import hashlib
 import base64
 import string
 import random
+
 from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
 
 from enum import Enum
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT, DELAY
 
-logger_ws = logger = logging.getLogger(__name__)
-logger_ws.level = logging.INFO
+logger = logging.getLogger(__name__)
+logger.level = logging.INFO
 sys.tracebacklimit = 0
 ALPHABET = string.ascii_letters + string.digits
 CONST_3 = "userDataStream.start"
@@ -50,11 +52,11 @@ class RateLimitInterval(Enum):
 class UserWSS:
     __slots__ = (
         "init",
-        "method",
         "exchange",
         "endpoint",
         "_api_key",
         "_api_secret",
+        "signed",
         "_passphrase",
         "_ws",
         "_listen_key",
@@ -68,14 +70,14 @@ class UserWSS:
         "tasks",
     )
 
-    def __init__(self, method, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None):
+    def __init__(self, ws_id, exchange, endpoint, api_key, api_secret, signed, passphrase=None):
         self.init = True
-        self.method = method
         self.exchange = exchange
         self.endpoint = endpoint
         #
         self._api_key = api_key
         self._api_secret = api_secret
+        self.signed = signed
         self._passphrase = passphrase
         self._ws = None
         self._listen_key = None
@@ -98,23 +100,30 @@ class UserWSS:
         async for msg in self._ws:
             # logger.info(f"_ws_listener: msg: {self.ws_id}: {msg}")
             if isinstance(msg, str):
-                res = await self._handle_msg(json.loads(msg))
-                # logger.info(f"_ws_listener: res: {self.ws_id}: {res}")
-                if res != 'pass':
-                    if res is None:
-                        self._response_pool[f"NoneResponse{self.ws_id}"] = None
-                    elif self.exchange == 'binance':
-                        self._response_pool[res.get('id')] = res.get('result')
-                    elif self.exchange in ['okx', 'bitfinex']:
-                        self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
-                    self.in_event.set()
-                await asyncio.sleep(0)
+                try:
+                    _msg = json.loads(msg)
+                except JSONDecodeError:
+                    logger.warning(f"UserWSS: {self.ws_id}: {msg}")
+                else:
+                    res = await self._handle_msg(_msg)
+                    # logger.info(f"_ws_listener: res: {self.ws_id}: {res}")
+                    if res != 'pass':
+                        if res is None:
+                            self._response_pool[f"NoneResponse{self.ws_id}"] = None
+                        elif self.exchange == 'binance':
+                            self._response_pool[res.get('id')] = res.get('result')
+                        elif self.exchange in ['okx', 'bitfinex']:
+                            self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
+
+                        self.in_event.set()
+                        # logger.info(f"_ws_listener: _response_pool: {self._response_pool}")
+                    await asyncio.sleep(0)
             else:
                 logger.warning(f"UserWSS: {self.ws_id}: {msg}")
                 await self.stop()
 
     async def start_wss(self):
-        async for self._ws in connect(self.endpoint, logger=logger_ws):
+        async for self._ws in connect(self.endpoint, logger=logger):
             try:
                 await self._ws_listener()
             except ConnectionClosed as ex:
@@ -146,13 +155,12 @@ class UserWSS:
             self.tasks_manage(self._keepalive(), f"keepalive-{self.ws_id}")
             logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
 
-    async def request(self, _method=None, _params=None, _api_key=False, _signed=False):
+    async def request(self, method, _params=None, _api_key=False, _signed=False):
         """
         Construct and handling request/response to WS API endpoint, use a description of the methods on
         https://developers.binance.com/docs/binance-trading-api/websocket_api#request-format
         :return: result: {} or None if temporary Out-of-Service state
         """
-        method = _method or self.method
         if self.request_limit_reached:
             logger.warning(f"UserWSS {self.ws_id}: request limit reached, try later")
             return None
@@ -291,7 +299,7 @@ class UserWSS:
             return msg
         elif self.exchange == 'okx':
             if msg.get('code') != '0':
-                await self.okx_error_handle(msg)
+                self.okx_error_handle(msg)
                 msg = None
             return msg
         elif self.exchange == 'bitfinex':
@@ -313,7 +321,7 @@ class UserWSS:
         elif event == 'auth':
             return msg if msg.get('status') == "OK" else None
         elif msg.get('code'):
-            return await self._handle_error_code(msg)
+            return self._handle_error_code(msg)
         return 'pass'
 
     async def _handle_info_event(self, msg):
@@ -324,7 +332,7 @@ class UserWSS:
             logger.critical('Bitfinex WSS platform: version change detected')
         return 'pass'
 
-    async def _handle_error_code(self, msg):
+    def _handle_error_code(self, msg):
         code = msg.get('code')
         if code == 10305:
             logger.warning('UserWSS Bitfinex: Reached limit of open channels')
@@ -351,7 +359,7 @@ class UserWSS:
         }
     # endregion
 
-    async def okx_error_handle(self, msg):
+    def okx_error_handle(self, msg):
         if msg.get('code') == '1':
             logger.warning(f"Operation failed: {msg}")
         elif msg.get('code') == '63999':
@@ -415,15 +423,16 @@ class UserWSSession:
         _signed=False,
     ):
         ws_id = f"{self.exchange}-{trade_id}-{method}"
+
         user_wss = self.user_wss.setdefault(
             ws_id,
             UserWSS(
-                method,
                 ws_id,
                 self.exchange,
                 self.endpoint,
                 self._api_key,
                 self._api_secret,
+                _signed,
                 self._passphrase
             )
         )
@@ -443,7 +452,7 @@ class UserWSSession:
             duration += DELAY
 
         try:
-            return await user_wss.request(_params=_params, _api_key=_api_key, _signed=_signed)
+            return await user_wss.request(method=method, _params=_params, _api_key=_api_key, _signed=_signed)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
