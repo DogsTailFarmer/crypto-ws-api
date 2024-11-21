@@ -1,4 +1,7 @@
 ## 2.0.15 - 2024-11-xx
+### Added for new features
+* `HTX` implemented
+
 ### Update
 * reused WS connection grouped by private and public methods
 * `websockets`: bump to v14.1

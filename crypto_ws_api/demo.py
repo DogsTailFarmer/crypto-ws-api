@@ -101,7 +101,7 @@ async def account_information(user_session: UserWSSession, _trade_id):
         res = await user_session.handle_request(
             _trade_id,
             "account.status",
-            _api_key=True,
+            send_api_key=True,
             _signed=True
         )
         if res is None:

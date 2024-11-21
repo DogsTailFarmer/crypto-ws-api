@@ -12,6 +12,8 @@ import hashlib
 import base64
 import string
 import random
+from datetime import datetime, timezone
+from urllib.parse import urlencode, urlparse
 
 from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
@@ -23,23 +25,40 @@ logger = logging.getLogger(__name__)
 logger.level = logging.INFO
 sys.tracebacklimit = 0
 ALPHABET = string.ascii_letters + string.digits
-CONST_3 = "userDataStream.start"
+CONST_WS_START = "userDataStream.start"
 
 
-def generate_signature(exchange, api_secret, data):
-    if exchange == 'bitfinex':
-        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha384).hexdigest()
-    elif exchange in ('huobi', 'okx'):
-        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).digest()
-        sig = base64.b64encode(sig).decode()
-    elif exchange == 'binance_ws':
-        sig = hmac.new(api_secret.encode("ascii"), data.encode("ascii"), hashlib.sha256).hexdigest()
-    elif exchange == 'bybit':
-        sig = hmac.new(bytes(api_secret.encode("utf-8")), data.encode("utf-8"), hashlib.sha256).hexdigest()
+def generate_signature(exchange: str, secret: str, data: str) -> str:
+    digest_func = hashlib.sha384 if exchange == 'bitfinex' else hashlib.sha256
+    encoding = "ascii" if exchange == 'binance_ws' else "utf-8"
+    key = secret.encode(encoding=encoding)
+    signature = hmac.new(
+        bytes(key) if exchange == 'bybit' else key,
+        data.encode(encoding=encoding),
+        digest_func
+    )
+    if exchange in {"huobi", "okx"}:
+        return base64.b64encode(signature.digest()).decode()
     else:
-        sig = hmac.new(api_secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
-    return sig
+        return signature.hexdigest()
 
+def compose_htx_ws_auth(endpoint, exchange, api_key, api_secret):
+    _params = {
+        "accessKey": api_key,
+        "signatureMethod": "HmacSHA256",
+        "signatureVersion": "2.1",
+        "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"))
+    }
+    signature_payload = (f"GET\n{urlparse(endpoint).hostname}\n{urlparse(endpoint).path}\n"
+                         f"{urlencode(_params)}")
+    signature = generate_signature(exchange, api_secret, signature_payload)
+    _params["authType"] = "api"
+    _params["signature"] = signature
+    return {
+        "action": "req",
+        "ch": "auth",
+        "params": _params
+    }
 
 # https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
 class RateLimitInterval(Enum):
@@ -68,6 +87,7 @@ class UserWSS:
         "in_event",
         "_response_pool",
         "tasks",
+        "ping"
     )
 
     def __init__(self, ws_id, exchange, endpoint, api_key, api_secret, signed, passphrase=None):
@@ -89,6 +109,7 @@ class UserWSS:
         self.request_limit_reached = False
         self.in_event = asyncio.Event()
         self.tasks = set()
+        self.ping = 0
 
     def tasks_manage(self, coro, name=None):
         _t = asyncio.create_task(coro, name=name)
@@ -112,9 +133,10 @@ class UserWSS:
                             self._response_pool[f"NoneResponse{self.ws_id}"] = None
                         elif self.exchange == 'binance':
                             self._response_pool[res.get('id')] = res.get('result')
-                        elif self.exchange in ['okx', 'bitfinex']:
+                        elif self.exchange in {'okx', 'bitfinex'}:
                             self._response_pool[res.get('id') or self.ws_id] = res.get('data') or res
-
+                        elif self.exchange == 'huobi':
+                            self._response_pool[res.get('cid') or self.ws_id] = res.get('data')
                         self.in_event.set()
                         # logger.info(f"_ws_listener: _response_pool: {self._response_pool}")
                     await asyncio.sleep(0)
@@ -123,7 +145,11 @@ class UserWSS:
                 await self.stop()
 
     async def start_wss(self):
-        async for self._ws in connect(self.endpoint, logger=logger):
+        async for self._ws in connect(
+                self.endpoint,
+                logger=logger,
+                ping_interval=None if self.exchange == 'huobi' else 20
+        ):
             try:
                 await self._ws_listener()
             except ConnectionClosed as ex:
@@ -140,7 +166,7 @@ class UserWSS:
                 logger.error(f"WSS start_wss() other exception: {ex}")
 
     async def ws_login(self):
-        res = await self.request('userDataStream.start', _api_key=True)
+        res = await self.request(CONST_WS_START, send_api_key=True)
         if res is None:
             logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
             raise ConnectionClosed(None, None)
@@ -148,14 +174,15 @@ class UserWSS:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')
                 self.tasks_manage(self.heartbeat(), f"heartbeat-{self.ws_id}")
-            else:
-                self._listen_key = f"{int(time.time() * 1000)}{self.ws_id}"
+            elif self.exchange == 'huobi':
+                self.tasks_manage(self.htx_keepalive(), f"htx_keepalive-{self.ws_id}")
+
             self.operational_status = True
             self.order_handling = True
             self.tasks_manage(self._keepalive(), f"keepalive-{self.ws_id}")
             logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
 
-    async def request(self, method, _params=None, _api_key=False, _signed=False):
+    async def request(self, method, _params=None, send_api_key=False, _signed=False):
         """
         Construct and handling request/response to WS API endpoint, use a description of the methods on
         https://developers.binance.com/docs/binance-trading-api/websocket_api#request-format
@@ -164,20 +191,20 @@ class UserWSS:
         if self.request_limit_reached:
             logger.warning(f"UserWSS {self.ws_id}: request limit reached, try later")
             return None
-        if method != 'userDataStream.start' and not self.operational_status:
+        if method != CONST_WS_START and not self.operational_status:
             logger.warning("UserWSS temporary in Out-of-Service state")
             return None
-        if method in ('order.place', 'order.cancelReplace', 'order') and not self.order_handling:
+        if method in ('order.place', 'order.cancelReplace', 'order', 'create-order') and not self.order_handling:
             logger.warning("UserWSS: exceeded order placement limit, try later")
             return None
         params = _params.copy() if _params else None
         r_id = f"{self.exchange}{method}{''.join(random.choices(ALPHABET, k=8))}"
-        if self.exchange in ("okx", "bitfinex") and method == CONST_3:
+        if self.exchange in ("okx", "bitfinex", "huobi") and method == CONST_WS_START:
             _id = self.ws_id
         else:
-            _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT[self.exchange]:]
+            _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT.get(self.exchange, 64):]
         await self._ws.send(
-            json.dumps(self.compose_request(_id, _api_key, method, params, _signed))
+            json.dumps(self.compose_request(_id, send_api_key, method, params, _signed))
         )
         await asyncio.sleep(0)
         try:
@@ -200,20 +227,28 @@ class UserWSS:
             elif f"NoneResponse{self.ws_id}" in self._response_pool:
                 return self._response_pool.pop(f"NoneResponse{self.ws_id}", None)
 
-    def compose_request(self, _id, api_key, method, params, signed):
+    def compose_request(self, _id, send_api_key, method, params, signed):
         if self.exchange == "binance":
-            return self._compose_binance_request(_id, api_key, method, params, signed)
+            return self._compose_binance_request(_id, send_api_key, method, params, signed)
         elif self.exchange == "okx":
             return self._compose_okx_request(_id, method, params)
-        elif self.exchange == 'bitfinex':
+        elif self.exchange == "bitfinex":
             return self._compose_bitfinex_request(_id, method, params)
+        elif self.exchange == "huobi":
+            return self._compose_htx_request(_id, method, params)
         else:
             raise ValueError(f"Unsupported exchange: {self.exchange}")
 
-    def _compose_binance_request(self, _id, api_key, method, params, signed):
+    def _compose_htx_request(self, _id, method, params):
+        if method == CONST_WS_START:
+            return compose_htx_ws_auth(self.endpoint, self.exchange, self._api_key, self._api_secret)
+        else:
+            return {"cid": _id, "ch": method, "params": params}
+
+    def _compose_binance_request(self, _id, send_api_key, method, params, signed):
         req = {"id": _id, "method": method}
         params = params or {}
-        if api_key:
+        if send_api_key:
             params["apiKey"] = self._api_key
         if signed:
             params["timestamp"] = int(time.time() * 1000)
@@ -224,7 +259,7 @@ class UserWSS:
         return req
 
     def _compose_okx_request(self, _id, method, params):
-        if method == CONST_3:
+        if method == CONST_WS_START:
             ts = int(time.time())
             signature_payload = f"{ts}GET/users/self/verify"
             signature = generate_signature(self.exchange, self._api_secret, signature_payload)
@@ -238,7 +273,7 @@ class UserWSS:
             return {"id": _id, "op": method, "args": params if isinstance(params, list) else [params]}
 
     def _compose_bitfinex_request(self, _id, method, params):
-        if method == CONST_3:
+        if method == CONST_WS_START:
             ts = int(time.time() * 1000)
             data = f"AUTH{ts}"
             return {
@@ -272,9 +307,20 @@ class UserWSS:
             await self.request(
                 "userDataStream.ping",
                 params,
-                _api_key=True,
+                send_api_key=True,
             )
             await asyncio.sleep(interval)
+
+    async def htx_keepalive(self, interval=60):
+        await asyncio.sleep(interval * 10)
+        while True:
+            await asyncio.sleep(interval)
+            if self.ping:
+                break
+            else:
+                self.ping = 1
+        logger.warning("From HTX server PING timeout exceeded")
+        await self.stop()
 
     async def stop(self):
         """
@@ -304,6 +350,32 @@ class UserWSS:
             return msg
         elif self.exchange == 'bitfinex':
             return await self.bitfinex_error_handle(msg)
+        elif self.exchange == 'huobi':
+            if msg.get('action') == 'ping':
+                pong = {
+                    "action": "pong",
+                    "data": {
+                        "ts": msg.get('data').get('ts')
+                    }
+                }
+                self.ping = 0
+                await self._ws.send(json.dumps(pong))
+                return 'pass'
+
+            if msg.get('code') == 200 or msg.get('status') == 'ok':
+                return msg
+
+            await self.htx_error_handle(msg)
+
+    async def htx_error_handle(self, msg):
+        if msg.get('code') == 500:
+            logger.warning(f"An issue occurred on exchange's side: {msg}")
+        elif msg.get('code') in {429, 4000}:
+            self._retry_after = int((time.time() + TIMEOUT) * 1000)
+            self.request_limit_reached = True
+            logger.warning(f"HTX WSS exceed limit: {msg}")
+        else:
+            logger.warning(f"Malformed request: status: {msg}")
 
     # region BitfinexErrorHandle
     async def bitfinex_error_handle(self, msg):
@@ -361,13 +433,14 @@ class UserWSS:
 
     def okx_error_handle(self, msg):
         if msg.get('code') == '1':
-            logger.warning(f"Operation failed: {msg}")
+            logger.warning(f"OKX User WSS operation failed: {msg}")
         elif msg.get('code') == '63999':
             logger.warning(f"An issue occurred on exchange's side: {msg}")
         elif msg.get('code') == '60014':
             self._retry_after = int((time.time() + TIMEOUT) * 1000)
             self.request_limit_reached = True
-        logger.warning(f"Malformed request: status: {msg}")
+        else:
+            logger.warning(f"Malformed request: status: {msg}")
 
     async def binance_error_handle(self, msg):
         error_msg = msg.get('error')
@@ -403,7 +476,7 @@ class UserWSSession:
     )
 
     def __init__(self, exchange, endpoint, api_key, api_secret, passphrase=None):
-        if exchange not in ('binance', 'okx', 'bitfinex'):
+        if exchange not in ('binance', 'okx', 'bitfinex', 'huobi'):
             raise UserWarning(f"UserWSSession: exchange {exchange} not serviced")
         self.exchange = exchange
         self.endpoint = endpoint
@@ -419,7 +492,7 @@ class UserWSSession:
         trade_id: str,
         method: str,
         _params=None,
-        _api_key=False,
+        send_api_key=False,
         _signed=False,
     ):
         ws_id = f"{self.exchange}-{trade_id}-{method}"
@@ -452,7 +525,7 @@ class UserWSSession:
             duration += DELAY
 
         try:
-            return await user_wss.request(method=method, _params=_params, _api_key=_api_key, _signed=_signed)
+            return await user_wss.request(method=method, _params=_params, send_api_key=send_api_key, _signed=_signed)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
