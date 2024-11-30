@@ -163,7 +163,7 @@ class UserWSS:
                     logger.warning(f"Restart WSS for {self.ws_id}")
                     continue
             except Exception as ex:
-                logger.error(f"WSS start_wss() other exception: {ex}")
+                logger.error(f"WSS start other exception: {ex}")
 
     async def ws_login(self):
         res = await self.request(CONST_WS_START, send_api_key=True)
