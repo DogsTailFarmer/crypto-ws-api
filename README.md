@@ -12,7 +12,7 @@
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_crypto-ws-api" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_crypto-ws-api&metric=alert_status"/></a>
 <a href="https://pepy.tech/project/crypto-ws-api" target="_blank"><img alt="Downloads" title="Downloads" src="https://static.pepy.tech/badge/crypto-ws-api"/></a>
 ***
-For :heavy_check_mark:Binance, :heavy_check_mark:OKX, :heavy_check_mark:Bitfinex
+For :heavy_check_mark:Binance, :heavy_check_mark:OKX, :heavy_check_mark:Bitfinex, :heavy_check_mark:HTX
 ***
 
 ## Features
@@ -20,6 +20,7 @@ Lightweight and efficient solution to utilize of all available methods** provide
 * [Binance Websocket API v3](https://binance-docs.github.io/apidocs/websocket_api/en)
 * [OKX Websocket API v5](https://www.okx.com/docs-v5/en/#overview-websocket)
 * [Bitfinex Websocket Inputs](https://docs.bitfinex.com/reference/ws-auth-input)
+* [HTX WS Trade](https://www.htx.com/en-us/opend/newApiPages/?id=8cb89359-77b5-11ed-9966-1928f079ab6)
 
 ** Not for channel by one-way subscription, for **_request <-> response_** mode only
 

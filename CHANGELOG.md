@@ -1,4 +1,4 @@
-## 2.0.15 - 2024-11-xx
+## 2.0.15 - 2024-12-16
 ### Added for new features
 * `HTX` implemented
 

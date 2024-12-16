@@ -412,7 +412,6 @@ class UserWSS:
             self.request_limit_reached = True
         else:
             logger.warning(f"Malformed request for {self.ws_id}: {msg}")
-        return None
 
     @staticmethod
     def _transform_list_message(msg):
