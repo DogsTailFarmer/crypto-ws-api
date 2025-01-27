@@ -1,3 +1,6 @@
+## 2.0.16 - 2025-11-27
+* `websockets`: bump to v14.2
+
 ## 2.0.15 - 2024-12-16
 ### Added for new features
 * `HTX` implemented
