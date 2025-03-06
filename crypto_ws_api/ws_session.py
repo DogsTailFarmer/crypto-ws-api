@@ -4,7 +4,8 @@ import asyncio
 import gc
 import sys
 import time
-import logging
+import logging.handlers
+from pathlib import Path
 import ujson as json
 from ujson import JSONDecodeError
 import hmac
@@ -21,12 +22,32 @@ from websockets import ConnectionClosed
 from enum import Enum
 from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT, DELAY
 
-logger = logging.getLogger(__name__)
-logger.level = logging.INFO
+from exchanges_wrapper import LOG_PATH
+
 sys.tracebacklimit = 0
+
 ALPHABET = string.ascii_letters + string.digits
 CONST_WS_START = "userDataStream.start"
 
+def set_logger(name, log_file, file_level=logging.INFO, propagate=False):
+    formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+    #
+    fh = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
+    fh.setFormatter(formatter)
+    fh.setLevel(file_level)
+    #
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    sh.setLevel(logging.INFO)
+    #
+    _logger = logging.getLogger(name)
+    _logger.addHandler(fh)
+    _logger.addHandler(sh)
+    _logger.propagate = propagate
+
+    return _logger
+
+logger = set_logger(__name__, Path(LOG_PATH, 'ws_session.log'))
 
 def generate_signature(exchange: str, secret: str, data: str) -> str:
     digest_func = hashlib.sha384 if exchange == 'bitfinex' else hashlib.sha256
@@ -87,10 +108,11 @@ class UserWSS:
         "in_event",
         "_response_pool",
         "tasks",
-        "ping"
+        "ping",
+        "logger"
     )
 
-    def __init__(self, ws_id, exchange, endpoint, api_key, api_secret, signed, passphrase=None):
+    def __init__(self, trade_id, ws_id, exchange, endpoint, api_key, api_secret, signed, passphrase=None):
         self.init = True
         self.exchange = exchange
         self.endpoint = endpoint
@@ -110,6 +132,15 @@ class UserWSS:
         self.in_event = asyncio.Event()
         self.tasks = set()
         self.ping = 0
+
+        if self.exchange == 'huobi':  # For debug purpose only
+            if trade_id in logging.root.manager.loggerDict:
+                logger.info(f"Logger {trade_id} already exists")
+                self.logger = logging.root.manager.loggerDict[trade_id]
+            else:
+                self.logger = set_logger(trade_id, Path(LOG_PATH, f"ws_{trade_id}.log"), logging.DEBUG)
+        else:
+            self.logger = logger
 
     def tasks_manage(self, coro, name=None):
         _t = asyncio.create_task(coro, name=name)
@@ -143,11 +174,13 @@ class UserWSS:
             else:
                 logger.warning(f"UserWSS: {self.ws_id}: {msg}")
                 await self.stop()
+        logger.warning(f"UserWSS: {self.ws_id}: _ws_listener stopped")
+        await self.stop()
 
     async def start_wss(self):
         async for self._ws in connect(
                 self.endpoint,
-                logger=logger,
+                logger=self.logger,
                 ping_interval=None if self.exchange == 'huobi' else 20
         ):
             try:
@@ -494,20 +527,23 @@ class UserWSSession:
         send_api_key=False,
         _signed=False,
     ):
+
         ws_id = f"{self.exchange}-{trade_id}-{method}"
 
-        user_wss = self.user_wss.setdefault(
-            ws_id,
-            UserWSS(
-                ws_id,
-                self.exchange,
-                self.endpoint,
-                self._api_key,
-                self._api_secret,
-                _signed,
-                self._passphrase
-            )
-        )
+        if ws_id in self.user_wss:
+            user_wss = self.user_wss[ws_id]
+        else:
+            user_wss = UserWSS(
+                    trade_id,
+                    ws_id,
+                    self.exchange,
+                    self.endpoint,
+                    self._api_key,
+                    self._api_secret,
+                    _signed,
+                    self._passphrase
+                )
+            self.user_wss[ws_id] = user_wss
 
         if user_wss.init:
             user_wss.init = False
