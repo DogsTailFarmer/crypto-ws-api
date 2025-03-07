@@ -193,16 +193,17 @@ class UserWSS:
                     self.operational_status = False
                     [task.cancel() for task in self.tasks if not task.done()]
                     self.tasks.clear()
-                    logger.warning(f"Restart WSS for {self.ws_id}")
+                    logger.warning(f"Restart UserWSS for {self.ws_id}")
                     continue
             except Exception as ex:
-                logger.error(f"WSS start other exception: {ex}")
+                logger.error(f"UserWSS start other exception: {ex}")
 
     async def ws_login(self):
         res = await self.request(CONST_WS_START, send_api_key=True)
         if res is None:
             logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
-            raise ConnectionClosed(None, None)
+            if self._ws:
+                await self._ws.close()
         else:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')
@@ -248,7 +249,8 @@ class UserWSS:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         else:
-            # logger.info(f"request: {self.ws_id}: {res}")
+            if self.exchange == 'huobi' and method == CONST_WS_START:
+                logger.info(f"request CONST_WS_START: {self.ws_id}: {res}")
             return res
 
     async def _response_distributor(self, _id):
