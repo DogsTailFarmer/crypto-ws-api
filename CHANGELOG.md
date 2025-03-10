@@ -1,3 +1,11 @@
+## 2.0.18 - 2025-03-10
+### Fix
+* [🔒] fix/ws_session.py: Proper restoration of WebSocket connection during recurring failures
+
+### Update
+* [💻] feat/ws_session.py: Add logging configuration and handlers for debug purpose
+* [🔄] fix/ws_session.py: Update UserWSS class to accept a logger instance
+
 ## 2.0.17 - 2025-02-20
 ### Update
 * Bump dependencies

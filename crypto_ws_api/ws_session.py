@@ -20,7 +20,7 @@ from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
 
 from enum import Enum
-from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT, DELAY
+from crypto_ws_api import TIMEOUT, ID_LEN_LIMIT, DELAY, DEBUG_LOG
 
 from exchanges_wrapper import LOG_PATH
 
@@ -96,7 +96,6 @@ class UserWSS:
         "endpoint",
         "_api_key",
         "_api_secret",
-        "signed",
         "_passphrase",
         "_ws",
         "_listen_key",
@@ -112,14 +111,13 @@ class UserWSS:
         "logger"
     )
 
-    def __init__(self, trade_id, ws_id, exchange, endpoint, api_key, api_secret, signed, passphrase=None):
+    def __init__(self, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None, trade_id=None):
         self.init = True
         self.exchange = exchange
         self.endpoint = endpoint
         #
         self._api_key = api_key
         self._api_secret = api_secret
-        self.signed = signed
         self._passphrase = passphrase
         self._ws = None
         self._listen_key = None
@@ -133,7 +131,7 @@ class UserWSS:
         self.tasks = set()
         self.ping = 0
 
-        if self.exchange == 'huobi':  # For debug purpose only
+        if self.exchange == DEBUG_LOG:
             if trade_id in logging.root.manager.loggerDict:
                 logger.info(f"Logger {trade_id} already exists")
                 self.logger = logging.root.manager.loggerDict[trade_id]
@@ -203,7 +201,7 @@ class UserWSS:
         if res is None:
             logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
             if self._ws:
-                await self._ws.close()
+                await self._ws.close(code=4000)
         else:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')
@@ -249,8 +247,6 @@ class UserWSS:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         else:
-            if self.exchange == 'huobi' and method == CONST_WS_START:
-                logger.info(f"request CONST_WS_START: {self.ws_id}: {res}")
             return res
 
     async def _response_distributor(self, _id):
@@ -536,14 +532,13 @@ class UserWSSession:
             user_wss = self.user_wss[ws_id]
         else:
             user_wss = UserWSS(
-                    trade_id,
                     ws_id,
                     self.exchange,
                     self.endpoint,
                     self._api_key,
                     self._api_secret,
-                    _signed,
-                    self._passphrase
+                    self._passphrase,
+                    trade_id
                 )
             self.user_wss[ws_id] = user_wss
 
