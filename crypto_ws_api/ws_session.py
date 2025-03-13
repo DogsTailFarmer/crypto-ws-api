@@ -553,6 +553,7 @@ class UserWSSession:
         while not (user_wss.operational_status and user_wss.order_handling):
             await asyncio.sleep(DELAY)
             if duration > TIMEOUT:
+                logger.warning(f"{trade_id}: Register timeout for method '{method}'")
                 return None
             duration += DELAY
 
@@ -562,6 +563,7 @@ class UserWSSession:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
             logger.error(f"crypto_ws_api.ws_session.handle_request(): {ex}")
+        logger.warning(f"{trade_id}: {method}: None response")
         return None
 
     async def stop(self):
