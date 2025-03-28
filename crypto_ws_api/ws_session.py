@@ -200,8 +200,7 @@ class UserWSS:
         res = await self.request(CONST_WS_START, send_api_key=True)
         if res is None:
             logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
-            if self._ws:
-                await self._ws.close(code=4000)
+            await self.stop()
         else:
             if self.exchange == 'binance':
                 self._listen_key = res.get('listenKey')

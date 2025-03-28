@@ -1,3 +1,7 @@
+## 2.0.19 - 2025-03-28
+### Fix
+* `ws_session.ws_login`: Incorrect exit from authentication procedure in case of unsuccessful attempt
+
 ## 2.0.18 - 2025-03-10
 ### Fix
 * [🔒] fix/ws_session.py: Proper restoration of WebSocket connection during recurring failures
