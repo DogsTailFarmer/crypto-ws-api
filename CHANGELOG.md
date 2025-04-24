@@ -1,3 +1,11 @@
+## 2.0.20 - 2025-04-24
+* On `Binance` now API key type [Ed25519](https://www.binance.com/en/support/faq/detail/6b9a63f1e3384cf48a2eedb82767a69a) is used instead of `HMAC`
+✨ feat(ws_session): implement `compose_binance_ws_auth` for Binance WebSocket authentication  
+🔧 fix(ws_session): update `generate_signature` for improved signature handling  
+🔧 fix(ws_session): handle `None` return in `request` method  
+🚀 chore(requirements): add `cryptography` dependency for signature handling  
+🔧 fix(pyproject): require Python version 3.10 or higher  
+
 ## 2.0.19 - 2025-03-28
 ### Fix
 * `ws_session.ws_login`: Incorrect exit from authentication procedure in case of unsuccessful attempt

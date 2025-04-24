@@ -1,6 +1,6 @@
 # Parameters for crypto-ws-api connector
-# Copyright © 2023 Jerry Fedorenko aka VM
-# __version__ = "1.0.0"
+# Copyright © 2023-2025 Jerry Fedorenko aka VM
+# __version__ = "2.0.20"
 
 # region endpoint
 [endpoint]
@@ -10,10 +10,16 @@
 # endregion
 
 # region Binance accounts
+# How to Generate an Ed25519 Key Pair and Register then on Binance:
+# https://www.binance.com/en/support/faq/detail/6b9a63f1e3384cf48a2eedb82767a69a
 [[accounts]]
     exchange = 'binance'
     name = 'Demo - Binance'
     api_key = '*********** Place API key there ************'
-    api_secret = '*********** Place secret API key there ************'
+    api_secret = """
+-----BEGIN PRIVATE KEY-----
+*********** Place Private Ed25519 key there ************
+-----END PRIVATE KEY-----
+"""
     test_net = true
 # endregion

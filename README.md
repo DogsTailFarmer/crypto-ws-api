@@ -12,7 +12,7 @@
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_crypto-ws-api" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_crypto-ws-api&metric=alert_status"/></a>
 <a href="https://pepy.tech/project/crypto-ws-api" target="_blank"><img alt="Downloads" title="Downloads" src="https://static.pepy.tech/badge/crypto-ws-api"/></a>
 ***
-For :heavy_check_mark:Binance, :heavy_check_mark:OKX, :heavy_check_mark:Bitfinex, :heavy_check_mark:HTX
+For :heavy_check_mark:[Binance](https://accounts.binance.com/en/register?ref=FXQ6HY5O), :heavy_check_mark:[OKX](https://okx.com/join/2607649), :heavy_check_mark:[Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP), :heavy_check_mark:[HTX](https://www.htx.com/invite/en-us/1f?invite_code=9uaw3223)
 ***
 
 ## Features

@@ -3,3 +3,4 @@ platformdirs==4.3.6
 toml~=0.10.2
 websockets==15.0.1
 ujson~=5.10.0
+cryptography~=44.0.2
