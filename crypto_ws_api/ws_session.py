@@ -218,7 +218,7 @@ class UserWSS:
             raise
 
     async def ws_login(self):
-        res = await self.request(CONST_WS_START, send_api_key=True)
+        res = await self.request(CONST_WS_START)
         if res is None:
             logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
             await self.stop()
@@ -231,7 +231,7 @@ class UserWSS:
             self.tasks_manage(self._keepalive(), f"keepalive-{self.ws_id}")
             logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
 
-    async def request(self, method, _params=None, send_api_key=False, _signed=False):
+    async def request(self, method, _params=None, _signed=False):
         """
         Construct and handling request/response to WS API endpoint, use a description of the methods on
         https://developers.binance.com/docs/binance-spot-api-docs/websocket-api
@@ -253,7 +253,7 @@ class UserWSS:
         else:
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT.get(self.exchange, 64):]
         await self._ws.send(
-            json.dumps(self.compose_request(_id, send_api_key, method, params, _signed))
+            json.dumps(self.compose_request(_id, method, params, _signed))
         )
         await asyncio.sleep(0)
         try:
@@ -275,7 +275,7 @@ class UserWSS:
                 return self._response_pool.pop(f"NoneResponse{self.ws_id}", None)
         return None
 
-    def compose_request(self, _id, send_api_key, method, params, signed):
+    def compose_request(self, _id, method, params, signed):
         if self.exchange == "binance":
             return self._compose_binance_request(_id, method, params, signed)
         elif self.exchange == "okx":
@@ -527,7 +527,6 @@ class UserWSSession:
         trade_id: str,
         method: str,
         _params=None,
-        send_api_key=False,
         _signed=False,
     ):
 
@@ -567,7 +566,7 @@ class UserWSSession:
             duration += DELAY
 
         try:
-            return await user_wss.request(method=method, _params=_params, send_api_key=send_api_key, _signed=_signed)
+            return await user_wss.request(method=method, _params=_params, _signed=_signed)
         except KeyboardInterrupt:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:

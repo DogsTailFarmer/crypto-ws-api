@@ -1,3 +1,6 @@
+## 2.1.0 - 2025-06-22
+✨ refactor(ws_session.py): simplify `ws_login` and `request` methods by removing redundant `send_api_key` parameter.
+
 ## 2.0.21 - 2025-06-22
 🔧 fix(README.md): Improve documentation layout for better readability  
 🔧 fix(ws_session.py): Handle `asyncio.CancelledError` gracefully in `start_wss` method  
