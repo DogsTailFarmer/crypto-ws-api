@@ -1,12 +1,12 @@
 # Parameters for crypto-ws-api connector
 # Copyright © 2023-2025 Jerry Fedorenko aka VM
-# __version__ = "2.0.20"
+# __version__ = "2.0.21"
 
 # region endpoint
 [endpoint]
     [endpoint.binance]
         ws_api = 'wss://ws-api.binance.com:443/ws-api/v3'
-        ws_api_test = 'wss://testnet.binance.vision/ws-api/v3'
+        ws_api_test = 'wss://ws-api.testnet.binance.vision:9443/ws-api/v3'
 # endregion
 
 # region Binance accounts

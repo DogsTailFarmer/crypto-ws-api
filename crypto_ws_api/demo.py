@@ -66,8 +66,6 @@ async def get_time(user_session: UserWSSession, _trade_id):
         )
         if res is None:
             logger.warning(CONST_1)
-    except asyncio.CancelledError:
-        pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
         logger.error(CONST_2, _ex)
     else:
@@ -87,8 +85,6 @@ async def current_average_price(user_session: UserWSSession, _trade_id):
         )
         if res is None:
             logger.warning(CONST_1)
-    except asyncio.CancelledError:
-        pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
         logger.error(CONST_2, _ex)
     else:
@@ -105,8 +101,6 @@ async def account_information(user_session: UserWSSession, _trade_id):
         )
         if res is None:
             logger.warning(CONST_1)
-    except asyncio.CancelledError:
-        pass  # Task cancellation should not be logged as an error
     except Exception as _ex:
         logger.error(CONST_2, _ex)
     else:

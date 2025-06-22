@@ -191,29 +191,31 @@ class UserWSS:
             else:
                 logger.warning(f"UserWSS: {self.ws_id}: {msg}")
                 await self.stop()
-        logger.warning(f"UserWSS: {self.ws_id}: _ws_listener stopped")
-        await self.stop()
 
     async def start_wss(self):
-        async for self._ws in connect(
-                self.endpoint,
-                logger=self.logger,
-                ping_interval=None if self.exchange in ('binance', 'huobi') else 20
-        ):
-            try:
-                await self._ws_listener()
-            except ConnectionClosed as ex:
-                if ex.rcvd and ex.rcvd.code == 4000:
-                    logger.info(f"WSS closed for {self.ws_id}")
-                    break
-                else:
-                    self.operational_status = False
-                    [task.cancel() for task in self.tasks if not task.done()]
-                    self.tasks.clear()
-                    logger.warning(f"Restart UserWSS for {self.ws_id}")
-                    continue
-            except Exception as ex:
-                logger.error(f"UserWSS start other exception: {ex}")
+        try:
+            async for self._ws in connect(
+                    self.endpoint,
+                    logger=self.logger,
+                    ping_interval=None if self.exchange in ('binance', 'huobi') else 20
+            ):
+                try:
+                    await self._ws_listener()
+                except ConnectionClosed as ex:
+                    if ex.rcvd and ex.rcvd.code == 4000:
+                        logger.info(f"WSS closed for {self.ws_id}")
+                        break
+                    else:
+                        self.operational_status = False
+                        [task.cancel() for task in self.tasks if not task.done()]
+                        self.tasks.clear()
+                        logger.warning(f"Restart UserWSS for {self.ws_id}")
+                        continue
+                except Exception as ex:
+                    logger.error(f"UserWSS start other exception: {ex}")
+        except asyncio.CancelledError:
+            await self.stop()
+            raise
 
     async def ws_login(self):
         res = await self.request(CONST_WS_START, send_api_key=True)
@@ -259,8 +261,6 @@ class UserWSS:
         except asyncio.exceptions.TimeoutError:
             logger.warning(f"UserWSS: get response timeout error: {self.ws_id}")
             await self.stop()
-            return None
-        except asyncio.CancelledError:
             return None
         else:
             return res
@@ -400,9 +400,10 @@ class UserWSS:
             if msg.get('code') == 200 or msg.get('status') == 'ok':
                 return msg
 
-            await self.htx_error_handle(msg)
+            self.htx_error_handle(msg)
+        return None
 
-    async def htx_error_handle(self, msg):
+    def htx_error_handle(self, msg):
         if msg.get('code') == 500:
             logger.warning(f"An issue occurred on exchange's side: {msg}")
         elif msg.get('code') in {429, 4000}:
@@ -567,7 +568,7 @@ class UserWSSession:
 
         try:
             return await user_wss.request(method=method, _params=_params, send_api_key=send_api_key, _signed=_signed)
-        except asyncio.CancelledError:
+        except KeyboardInterrupt:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
             logger.error(f"crypto_ws_api.ws_session.handle_request(): {ex}")

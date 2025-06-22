@@ -5,12 +5,13 @@
 <h3 align="center">Provides of connection management, keepalive and rate limits control</h3>
 
 ***
-<a href="https://pypi.org/project/crypto-ws-api/"><img src="https://img.shields.io/pypi/v/crypto-ws-api" alt="PyPI version"></a>
-<a href="https://codeclimate.com/github/DogsTailFarmer/crypto-ws-api/maintainability"><img src="https://api.codeclimate.com/v1/badges/2d2a654ba393eb88d911/maintainability" /></a>
+<h1 align="center"><a href="https://pypi.org/project/crypto-ws-api/"><img src="https://img.shields.io/pypi/v/crypto-ws-api" alt="PyPI version"></a>
 <a href="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api.svg/?label=resolved+issues&token=TXghPzbi0YWhkCLU8Q1tmDyQ"/></a>
 <a href="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://app.deepsource.com/gh/DogsTailFarmer/crypto-ws-api.svg/?label=active+issues&token=TXghPzbi0YWhkCLU8Q1tmDyQ"/></a>
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_crypto-ws-api" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_crypto-ws-api&metric=alert_status"/></a>
 <a href="https://pepy.tech/project/crypto-ws-api" target="_blank"><img alt="Downloads" title="Downloads" src="https://static.pepy.tech/badge/crypto-ws-api"/></a>
+</h1>
+
 ***
 For :heavy_check_mark:[Binance](https://accounts.binance.com/en/register?ref=FXQ6HY5O), :heavy_check_mark:[OKX](https://okx.com/join/2607649), :heavy_check_mark:[Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP), :heavy_check_mark:[HTX](https://www.htx.com/invite/en-us/1f?invite_code=9uaw3223)
 ***

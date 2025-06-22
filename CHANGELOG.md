@@ -1,3 +1,10 @@
+## 2.0.21 - 2025-06-22
+🔧 fix(README.md): Improve documentation layout for better readability  
+🔧 fix(ws_session.py): Handle `asyncio.CancelledError` gracefully in `start_wss` method  
+🔧 fix(ws_session.py): Replace `asyncio.CancelledError` with `KeyboardInterrupt` exception in `handle_request` method  
+🔧 fix(demo.py): Remove unnecessary `asyncio.CancelledError` handling to clean up error logging  
+🔧 fix(ws_api.toml.template): Update testnet URL for Binance websocket API 
+
 ## 2.0.20 - 2025-04-24
 * On `Binance` now API key type [Ed25519](https://www.binance.com/en/support/faq/detail/6b9a63f1e3384cf48a2eedb82767a69a) is used instead of `HMAC`
 ✨ feat(ws_session): implement `compose_binance_ws_auth` for Binance WebSocket authentication  
