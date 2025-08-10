@@ -16,6 +16,7 @@ import random
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+import inspect
 
 from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
@@ -102,6 +103,13 @@ def compose_htx_ws_auth(endpoint, exchange, api_key, api_secret):
         "params": _params
     }
 
+def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
+    _t = asyncio.create_task(coro, name=name or inspect.stack()[1][3])
+    tasks_set.add(_t)
+    if add_done_callback:
+        _t.add_done_callback(tasks_set.discard)
+
+
 # https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
 class RateLimitInterval(Enum):
     SECOND = 1
@@ -159,13 +167,8 @@ class UserWSS:
         else:
             self.logger = logger
 
-    def tasks_manage(self, coro, name=None):
-        _t = asyncio.create_task(coro, name=name)
-        self.tasks.add(_t)
-        _t.add_done_callback(self.tasks.discard)
-
-    async def _ws_listener(self):
-        self.tasks_manage(self.ws_login())
+    async def _ws_listener(self):  #NOSONAR
+        tasks_manage(self.tasks, self.ws_login(), f"ws_login-{self.ws_id}")
         async for msg in self._ws:
             # logger.info(f"_ws_listener: ws_id: {self.ws_id} msg: {msg}")
             if isinstance(msg, str):
@@ -224,11 +227,11 @@ class UserWSS:
             await self.stop()
         else:
             if self.exchange == 'huobi':
-                self.tasks_manage(self.htx_keepalive(), f"htx_keepalive-{self.ws_id}")
+                tasks_manage(self.tasks, self.htx_keepalive(), f"htx_keepalive-{self.ws_id}")
 
             self.operational_status = True
             self.order_handling = True
-            self.tasks_manage(self._keepalive(), f"keepalive-{self.ws_id}")
+            tasks_manage(self.tasks, self._keepalive(), f"keepalive-{self.ws_id}")
             logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
 
     async def request(self, method, _params=None, _signed=False):
@@ -247,7 +250,7 @@ class UserWSS:
             logger.warning("UserWSS: exceeded order placement limit, try later")
             return None
         params = _params.copy() if _params else None
-        r_id = f"{self.exchange}{method}{''.join(random.choices(ALPHABET, k=8))}"
+        r_id = f"{self.exchange}{method}{''.join(random.choices(ALPHABET, k=8))}"  #NOSONAR
         if self.exchange in ("okx", "bitfinex", "huobi") and method == CONST_WS_START:
             _id = self.ws_id
         else:
@@ -553,9 +556,7 @@ class UserWSSession:
         if user_wss.init:
             user_wss.init = False
             user_wss.operational_status = False
-            _t = asyncio.create_task(user_wss.start_wss())
-            self.tasks_wss.add(_t)
-            _t.add_done_callback(self.tasks_wss.discard)
+            tasks_manage(self.tasks_wss, user_wss.start_wss(), f"start_wss-{ws_id}")
 
         duration = 0
         while not (user_wss.operational_status and user_wss.order_handling):

@@ -1,3 +1,7 @@
+## 2.1.1 - 2025-08-10
+♻️ refactor(ws_session): introduce `tasks_manage` for centralized task handling  
+♻️ chore(deps): update platformdirs and cryptography to latest versions
+
 ## 2.1.0 - 2025-06-22
 ✨ refactor(ws_session.py): simplify `ws_login` and `request` methods by removing redundant `send_api_key` parameter.
 

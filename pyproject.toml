@@ -18,11 +18,11 @@ requires-python = ">=3.10"
 
 dependencies = [
     "shortuuid~=1.0.13",
-    "platformdirs==4.3.6",
+    "platformdirs==4.3.8",
     "toml~=0.10.2",
     "websockets==15.0.1",
     "ujson~=5.10.0",
-    "cryptography~=44.0.2"
+    "cryptography~=45.0.6"
 ]
 
 [tool.flit.module]
