@@ -43,8 +43,8 @@ async def main(account_name):
 
     # Demo method's calling
     await account_information(user_session, trade_id)
-    asyncio.ensure_future(demo_loop(user_session, get_time, trade_id, 2))
-    asyncio.ensure_future(demo_loop(user_session, current_average_price, trade_id, 3))
+    _t1 = asyncio.ensure_future(demo_loop(user_session, get_time, trade_id, 2))
+    _t2 = asyncio.ensure_future(demo_loop(user_session, current_average_price, trade_id, 3))
 
     await asyncio.sleep(20)
 

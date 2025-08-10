@@ -1,3 +1,6 @@
+## 2.1.2 - 2025-08-10
+♻️ refactor(demo/demo_loop): Store demo_loop coroutines in variables for reference
+
 ## 2.1.1 - 2025-08-10
 ♻️ refactor(ws_session): introduce `tasks_manage` for centralized task handling  
 ♻️ chore(deps): update platformdirs and cryptography to latest versions
