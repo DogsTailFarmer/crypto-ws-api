@@ -109,6 +109,20 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
     if add_done_callback:
         _t.add_done_callback(tasks_set.discard)
 
+async def tasks_cancel(tasks_set: set):
+    tasks = tasks_set.copy()
+    for task in tasks:
+        task.cancel()
+        flag = None
+        try:
+            await task
+        except asyncio.CancelledError:  # NOSONAR
+            flag = True
+        finally:
+            logger.info(f"The task {task.get_name()} was cancelled {'by force' if flag else ''}")
+
+    tasks_set.clear()
+
 
 # https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
 class RateLimitInterval(Enum):
@@ -210,8 +224,7 @@ class UserWSS:
                         break
                     else:
                         self.operational_status = False
-                        [task.cancel() for task in self.tasks if not task.done()]
-                        self.tasks.clear()
+                        await tasks_cancel(self.tasks)
                         logger.warning(f"Restart UserWSS for {self.ws_id}")
                         continue
                 except Exception as ex:
@@ -367,8 +380,7 @@ class UserWSS:
         self.operational_status = None  # Not restart and break all loops
         self.order_handling = False
         self.init = True
-        [task.cancel() for task in self.tasks if not task.done()]
-        self.tasks.clear()
+        await tasks_cancel(self.tasks)
         if self._ws:
             await self._ws.close(code=4000)
         gc.collect()
@@ -575,10 +587,15 @@ class UserWSSession:
         logger.warning(f"{trade_id}: {method}: None response")
         return None
 
-    async def stop(self):
-        user_wss_copy = dict(self.user_wss)
-        for ws in user_wss_copy.values():
-            await ws.stop()
-        self.user_wss.clear()
-        [task.cancel() for task in self.tasks_wss if not task.done()]
-        self.tasks_wss.clear()
+    async def stop(self, _trade_id):
+        user_wss = {}
+        for k in list(self.user_wss.keys()):  # NOSONAR
+            if _trade_id in k:
+                user_wss[k] = self.user_wss.pop(k)
+
+        [await ws.stop() for ws in user_wss.values()]
+
+        tasks = set()
+        [tasks.add(task) for task in self.tasks_wss if _trade_id in task.get_name()]
+        self.tasks_wss.difference_update(tasks)
+        await tasks_cancel(tasks)
