@@ -1,8 +1,9 @@
-## 2.1.3b2 - 2025-10-16
+## 2.1.3 - 2025-10-16
 ✨ feat(ws_session.py): Add `tasks_cancel()` for structured task cancellation with logging  
 ♻️ refactor(ws_session.py): Refactor task cancellation and stop logic to use `tasks_cancel()`  
 🔧 fix(ws_session.py): Update logger references for consistent logging throughout the module  
 🔧 chore(requirements.txt): Upgrade `platformdirs` to 4.5.0, `ujson` to 5.11.0, and `cryptography` to 46.0.3
+🔧 fix(ws_session.py): _improve memory usage_
 
 ## 2.1.2 - 2025-08-10
 ♻️ refactor(demo/demo_loop): Store demo_loop coroutines in variables for reference

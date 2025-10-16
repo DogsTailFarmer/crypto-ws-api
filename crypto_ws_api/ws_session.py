@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import traceback
 import asyncio
 import gc
 import sys
@@ -111,7 +110,6 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
         _t.add_done_callback(tasks_set.discard)
 
 async def tasks_cancel(tasks_set: set, _logger=logger):
-    _logger.debug(5)
     tasks = tasks_set.copy()
     for task in tasks:
         task.cancel()
@@ -123,8 +121,6 @@ async def tasks_cancel(tasks_set: set, _logger=logger):
         finally:
             _logger.info(f"The task {task.get_name()} was cancelled {'by force' if flag else ''}")
     tasks_set.clear()
-    _logger.debug(6)
-
 
 # https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
 class RateLimitInterval(Enum):
@@ -177,14 +173,15 @@ class UserWSS:
         self.stopped = False
 
         if self.exchange == DEBUG_LOG:
-            if trade_id in logging.root.manager.loggerDict:
-                self.logger = logging.root.manager.loggerDict[trade_id]
+            log_key = f"ws_{trade_id}"
+            if log_key in logging.root.manager.loggerDict:
+                self.logger = logging.root.manager.loggerDict[log_key]
             else:
-                self.logger = set_logger(trade_id, Path(LOG_PATH, f"ws_{trade_id}.log"), logging.DEBUG)
+                self.logger = set_logger(log_key, Path(LOG_PATH, f"{log_key}.log"), logging.DEBUG)
         else:
             self.logger = logger
 
-    async def _ws_listener(self):
+    async def _ws_listener(self):  # NOSONAR(S3776)
         tasks_manage(self.tasks, self.ws_login(), f"ws_login-{self.ws_id}")
         async for msg in self._ws:
             if isinstance(msg, str):
@@ -238,9 +235,6 @@ class UserWSS:
             try:
                 await self._ws_listener()
             except ConnectionClosed as ex:
-
-                self.logger.debug(f"Exception traceback: {traceback.format_exc()}")
-
                 self._ws = None
                 if ex.rcvd and ex.rcvd.code == 4000:
                     self.logger.info(f"WSS closed for {self.ws_id}")
@@ -552,7 +546,7 @@ class UserWSSession:
         self.tasks_wss = set()
         self.logger = logger
 
-    async def handle_request(
+    async def handle_request(  # NOSONAR(S3776)
         self,
         trade_id: str,
         method: str,
@@ -561,10 +555,11 @@ class UserWSSession:
     ):
 
         if self.exchange == DEBUG_LOG:
-            if trade_id in logging.root.manager.loggerDict:
-                self.logger = logging.root.manager.loggerDict[trade_id]
+            log_key = f"ws_{trade_id}"
+            if log_key in logging.root.manager.loggerDict:
+                self.logger = logging.root.manager.loggerDict[log_key]
             else:
-                self.logger = set_logger(trade_id, Path(LOG_PATH, f"ws_{trade_id}.log"), logging.DEBUG)
+                self.logger = set_logger(log_key, Path(LOG_PATH, f"{log_key}.log"), logging.DEBUG)
 
         ws_id = f"{self.exchange}-{trade_id}"
         if self.exchange in ('binance', 'vertex'):
@@ -618,7 +613,7 @@ class UserWSSession:
 
     async def stop(self, _trade_id):
         user_wss_to_stop = []
-        for key in list(self.user_wss.keys()):
+        for key in list(self.user_wss.keys()):  # NOSONAR
             if _trade_id in key:
                 user_wss_to_stop.append((key, self.user_wss.pop(key)))
 
