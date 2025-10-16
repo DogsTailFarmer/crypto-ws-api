@@ -13,7 +13,7 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __email__ = "jerry.fedorenko@yahoo.com"
 __credits__ = ["https://github.com/DanyaSWorlD"]
-__version__ = "2.1.3b1"
+__version__ = "2.1.3b2"
 
 from pathlib import Path
 import shutil
@@ -22,7 +22,7 @@ from platformdirs import user_config_path
 VERSION = __version__
 TIMEOUT = 5  # sec timeout for WSS initialization and get response
 DELAY = 0.1  # sec delay in keepalive loop
-DEBUG_LOG = 'debug'  # The name of the exchange for which log files, separated by trade_id with DEBUG level, will be generated
+DEBUG_LOG = 'huobi'  # The name of the exchange for which log files, separated by trade_id with DEBUG level, will be generated
 # Maximum str size for unique query ID
 ID_LEN_LIMIT = {
     "binance": 36,

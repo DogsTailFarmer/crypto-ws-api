@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import traceback
 import asyncio
 import gc
 import sys
@@ -75,7 +76,7 @@ def generate_signature(exchange: str, secret: str, data: str) -> str:
         return signature.hexdigest()
 
 def compose_binance_ws_auth(_id: str, api_key: str, api_secret: str) -> dict:
-    req = {"id": _id, "method": "session.logon"}
+    req: dict[str, str | dict[str, str | int]] = {"id": _id, "method": "session.logon"}
     params = {
         "apiKey": api_key,
         "timestamp": int(time.time() * 1000)
@@ -109,7 +110,8 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
     if add_done_callback:
         _t.add_done_callback(tasks_set.discard)
 
-async def tasks_cancel(tasks_set: set):
+async def tasks_cancel(tasks_set: set, _logger=logger):
+    _logger.debug(5)
     tasks = tasks_set.copy()
     for task in tasks:
         task.cancel()
@@ -119,9 +121,9 @@ async def tasks_cancel(tasks_set: set):
         except asyncio.CancelledError:  # NOSONAR
             flag = True
         finally:
-            logger.info(f"The task {task.get_name()} was cancelled {'by force' if flag else ''}")
-
+            _logger.info(f"The task {task.get_name()} was cancelled {'by force' if flag else ''}")
     tasks_set.clear()
+    _logger.debug(6)
 
 
 # https://binance-docs.github.io/apidocs/websocket_api/en/#rate-limits
@@ -150,7 +152,8 @@ class UserWSS:
         "_response_pool",
         "tasks",
         "ping",
-        "logger"
+        "logger",
+        "stopped"
     )
 
     def __init__(self, ws_id, exchange, endpoint, api_key, api_secret, passphrase=None, trade_id=None):
@@ -171,28 +174,26 @@ class UserWSS:
         self.in_event = asyncio.Event()
         self.tasks = set()
         self.ping = 0
+        self.stopped = False
 
         if self.exchange == DEBUG_LOG:
             if trade_id in logging.root.manager.loggerDict:
-                logger.info(f"Logger {trade_id} already exists")
                 self.logger = logging.root.manager.loggerDict[trade_id]
             else:
                 self.logger = set_logger(trade_id, Path(LOG_PATH, f"ws_{trade_id}.log"), logging.DEBUG)
         else:
             self.logger = logger
 
-    async def _ws_listener(self):  #NOSONAR
+    async def _ws_listener(self):
         tasks_manage(self.tasks, self.ws_login(), f"ws_login-{self.ws_id}")
         async for msg in self._ws:
-            # logger.info(f"_ws_listener: ws_id: {self.ws_id} msg: {msg}")
             if isinstance(msg, str):
                 try:
                     _msg = json.loads(msg)
                 except JSONDecodeError:
-                    logger.warning(f"UserWSS: {self.ws_id}: {msg}")
+                    self.logger.warning(f"UserWSS JSONDecodeError: {self.ws_id}: {msg}")
                 else:
                     res = await self._handle_msg(_msg)
-                    # logger.info(f"_ws_listener: res: {self.ws_id}: {res}")
                     if res != 'pass':
                         if res is None:
                             self._response_pool[f"NoneResponse{self.ws_id}"] = None
@@ -203,49 +204,73 @@ class UserWSS:
                         elif self.exchange == 'huobi':
                             self._response_pool[res.get('cid') or self.ws_id] = res.get('data')
                         self.in_event.set()
-                        # logger.info(f"_ws_listener: _response_pool: {self._response_pool}")
                     await asyncio.sleep(0)
             else:
-                logger.warning(f"UserWSS: {self.ws_id}: {msg}")
-                await self.stop()
+                self.logger.warning(f"UserWSS: {self.ws_id}: {msg}")
+                break
+        self.logger.info(f"UserWSS listener loop for {self.ws_id} stopped")
+
+    async def stop(self):
+        """
+        Stop data stream
+        """
+        if not self.stopped:
+            self.stopped = True
+            self.operational_status = None  # Not restart and break all loops
+            self.order_handling = False
+            if self._ws:
+                await self._ws.close(code=4000)
+                self._ws = None
+            await self.cycle_init()
+            self.logger.info(f"User WSS for {self.ws_id} stopped")
+
+    async def cycle_init(self):
+        await tasks_cancel(self.tasks, _logger=self.logger)
+        self._response_pool.clear()
+        gc.collect()
 
     async def start_wss(self):
-        try:
-            async for self._ws in connect(
-                    self.endpoint,
-                    logger=self.logger,
-                    ping_interval=None if self.exchange in ('binance', 'huobi') else 20
-            ):
-                try:
-                    await self._ws_listener()
-                except ConnectionClosed as ex:
-                    if ex.rcvd and ex.rcvd.code == 4000:
-                        logger.info(f"WSS closed for {self.ws_id}")
-                        break
-                    else:
-                        self.operational_status = False
-                        await tasks_cancel(self.tasks)
-                        logger.warning(f"Restart UserWSS for {self.ws_id}")
-                        continue
-                except Exception as ex:
-                    logger.error(f"UserWSS start other exception: {ex}")
-        except asyncio.CancelledError:
-            await self.stop()
-            raise
+        async for self._ws in connect(
+                self.endpoint,
+                logger=self.logger,
+                ping_interval=None if self.exchange in ('binance', 'huobi') else 20
+        ):
+            try:
+                await self._ws_listener()
+            except ConnectionClosed as ex:
+
+                self.logger.debug(f"Exception traceback: {traceback.format_exc()}")
+
+                self._ws = None
+                if ex.rcvd and ex.rcvd.code == 4000:
+                    self.logger.info(f"WSS closed for {self.ws_id}")
+                    break
+                else:
+                    self.operational_status = False
+                    await self.cycle_init()
+                    self.logger.warning(f"Restart UserWSS for {self.ws_id}")
+                    continue
+            except Exception as ex:
+                self.logger.error(f"UserWSS start other exception: {ex}")
+                break
+            break
+        self.logger.info(f"UserWSS start loop for {self.ws_id} stopped")
+        await self.stop()
 
     async def ws_login(self):
         res = await self.request(CONST_WS_START)
         if res is None:
-            logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
+            self.logger.warning(f"UserWSS: Not 'logged in' for {self.ws_id}")
             await self.stop()
         else:
+            self.operational_status = True
+            self.order_handling = True
+
             if self.exchange == 'huobi':
                 tasks_manage(self.tasks, self.htx_keepalive(), f"htx_keepalive-{self.ws_id}")
 
-            self.operational_status = True
-            self.order_handling = True
             tasks_manage(self.tasks, self._keepalive(), f"keepalive-{self.ws_id}")
-            logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
+            self.logger.info(f"UserWSS: 'logged in' for {self.ws_id}")
 
     async def request(self, method, _params=None, _signed=False):
         """
@@ -254,13 +279,13 @@ class UserWSS:
         :return: result: {} or None if temporary Out-of-Service state
         """
         if self.request_limit_reached:
-            logger.warning(f"UserWSS {self.ws_id}: request limit reached, try later")
+            self.logger.warning(f"UserWSS {self.ws_id}: request limit reached, try later")
             return None
         if method != CONST_WS_START and not self.operational_status:
-            logger.warning("UserWSS temporary in Out-of-Service state")
+            self.logger.warning("UserWSS temporary in Out-of-Service state")
             return None
         if method in ('order.place', 'order.cancelReplace', 'order', 'create-order') and not self.order_handling:
-            logger.warning("UserWSS: exceeded order placement limit, try later")
+            self.logger.warning("UserWSS: exceeded order placement limit, try later")
             return None
         params = _params.copy() if _params else None
         r_id = f"{self.exchange}{method}{''.join(random.choices(ALPHABET, k=8))}"  #NOSONAR
@@ -275,7 +300,7 @@ class UserWSS:
         try:
             res = await asyncio.wait_for(self._response_distributor(_id), timeout=TIMEOUT)
         except asyncio.exceptions.TimeoutError:
-            logger.warning(f"UserWSS: get response timeout error: {self.ws_id}")
+            self.logger.warning(f"UserWSS: get response timeout error: {self.ws_id}")
             await self.stop()
             return None
         else:
@@ -356,35 +381,23 @@ class UserWSS:
         while self.operational_status is not None:
             if self.request_limit_reached and (int(time.time() * 1000) - self._retry_after >= 0):
                 self.request_limit_reached = False
-                logger.info(f"UserWSS: request limit reached restored for {self.ws_id}")
+                self.logger.info(f"UserWSS: request limit reached restored for {self.ws_id}")
             if not self.order_handling and (int(time.time() * 1000) - self._retry_after >= 0):
                 self.order_handling = True
-                logger.info(f"UserWSS order handling status restored for {self.ws_id}")
+                self.logger.info(f"UserWSS order handling status restored for {self.ws_id}")
             await asyncio.sleep(interval)
 
     async def htx_keepalive(self, interval=60):
         await asyncio.sleep(interval * 10)
-        while True:
+        while self.operational_status is not None:
             await asyncio.sleep(interval)
             if self.ping:
+                self.logger.warning("From HTX server PING timeout exceeded")
                 break
             else:
                 self.ping = 1
-        logger.warning("From HTX server PING timeout exceeded")
+        self.logger.info(f"UserWSS htx_keepalive loop for {self.ws_id} stopped")
         await self.stop()
-
-    async def stop(self):
-        """
-        Stop data stream
-        """
-        self.operational_status = None  # Not restart and break all loops
-        self.order_handling = False
-        self.init = True
-        await tasks_cancel(self.tasks)
-        if self._ws:
-            await self._ws.close(code=4000)
-        gc.collect()
-        logger.info(f"User WSS for {self.ws_id} stopped")
 
     async def _handle_msg(self, msg):
         if self.exchange == 'binance':
@@ -420,13 +433,13 @@ class UserWSS:
 
     def htx_error_handle(self, msg):
         if msg.get('code') == 500:
-            logger.warning(f"An issue occurred on exchange's side: {msg}")
+            self.logger.warning(f"An issue occurred on exchange's side: {msg}")
         elif msg.get('code') in {429, 4000}:
             self._retry_after = int((time.time() + TIMEOUT) * 1000)
             self.request_limit_reached = True
-            logger.warning(f"HTX WSS exceed limit: {msg}")
+            self.logger.warning(f"HTX WSS exceed limit: {msg}")
         else:
-            logger.warning(f"Malformed request: status: {msg}")
+            self.logger.warning(f"Malformed request: status: {msg}")
 
     # region BitfinexErrorHandle
     async def bitfinex_error_handle(self, msg):
@@ -449,20 +462,20 @@ class UserWSS:
 
     async def _handle_info_event(self, msg):
         if not msg.get('platform', {}).get('status'):
-            logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
+            self.logger.warning(f"UserWSS Bitfinex platform in maintenance mode: {msg}")
             await self.stop()
         elif msg.get('version') != 2:
-            logger.critical('Bitfinex WSS platform: version change detected')
+            self.logger.critical('Bitfinex WSS platform: version change detected')
         return 'pass'
 
     def _handle_error_code(self, msg):
         code = msg.get('code')
         if code == 10305:
-            logger.warning('UserWSS Bitfinex: Reached limit of open channels')
+            self.logger.warning('UserWSS Bitfinex: Reached limit of open channels')
             self._retry_after = int((time.time() + TIMEOUT) * 1000)
             self.request_limit_reached = True
         else:
-            logger.warning(f"Malformed request for {self.ws_id}: {msg}")
+            self.logger.warning(f"Malformed request for {self.ws_id}: {msg}")
 
     @staticmethod
     def _transform_list_message(msg):
@@ -483,18 +496,18 @@ class UserWSS:
 
     def okx_error_handle(self, msg):
         if msg.get('code') == '1':
-            logger.warning(f"OKX User WSS operation failed: {msg}")
+            self.logger.warning(f"OKX User WSS operation failed: {msg}")
         elif msg.get('code') == '63999':
-            logger.warning(f"An issue occurred on exchange's side: {msg}")
+            self.logger.warning(f"An issue occurred on exchange's side: {msg}")
         elif msg.get('code') == '60014':
             self._retry_after = int((time.time() + TIMEOUT) * 1000)
             self.request_limit_reached = True
         else:
-            logger.warning(f"Malformed request: status: {msg}")
+            self.logger.warning(f"Malformed request: status: {msg}")
 
     async def binance_error_handle(self, msg):
         error_msg = msg.get('error')
-        logger.error(f"Malformed request: status: {error_msg}")
+        self.logger.error(f"Malformed request: status: {error_msg}")
         if msg.get('status') in (401, 403):
             await self.stop()
         if msg.get('status') in (418, 429):
@@ -523,6 +536,7 @@ class UserWSSession:
         "_passphrase",
         "user_wss",
         "tasks_wss",
+        "logger",
     )
 
     def __init__(self, exchange, endpoint, api_key, api_secret, passphrase=None):
@@ -536,6 +550,7 @@ class UserWSSession:
         self._passphrase = passphrase
         self.user_wss = {}
         self.tasks_wss = set()
+        self.logger = logger
 
     async def handle_request(
         self,
@@ -545,15 +560,28 @@ class UserWSSession:
         _signed=False,
     ):
 
+        if self.exchange == DEBUG_LOG:
+            if trade_id in logging.root.manager.loggerDict:
+                self.logger = logging.root.manager.loggerDict[trade_id]
+            else:
+                self.logger = set_logger(trade_id, Path(LOG_PATH, f"ws_{trade_id}.log"), logging.DEBUG)
+
         ws_id = f"{self.exchange}-{trade_id}"
         if self.exchange in ('binance', 'vertex'):
             ws_id = f"{ws_id}{'_ST' if _signed else '_SF'}"
         else:
             ws_id = f"{ws_id}-{method}"
 
+
+        init_session = True
         if ws_id in self.user_wss:
             user_wss = self.user_wss[ws_id]
-        else:
+            if user_wss.stopped:
+                await self.stop(ws_id)
+            else:
+                init_session = False
+
+        if init_session:
             user_wss = UserWSS(
                     ws_id,
                     self.exchange,
@@ -565,6 +593,7 @@ class UserWSSession:
                 )
             self.user_wss[ws_id] = user_wss
 
+        # noinspection PyUnboundLocalVariable
         if user_wss.init:
             user_wss.init = False
             user_wss.operational_status = False
@@ -574,7 +603,7 @@ class UserWSSession:
         while not (user_wss.operational_status and user_wss.order_handling):
             await asyncio.sleep(DELAY)
             if duration > TIMEOUT:
-                logger.warning(f"{trade_id}: Register timeout for method '{method}'")
+                self.logger.warning(f"{trade_id}: Register timeout for method '{method}'")
                 return None
             duration += DELAY
 
@@ -583,19 +612,24 @@ class UserWSSession:
         except KeyboardInterrupt:
             pass  # Task cancellation should not be logged as an error
         except Exception as ex:
-            logger.error(f"crypto_ws_api.ws_session.handle_request(): {ex}")
-        logger.warning(f"{trade_id}: {method}: None response")
+            self.logger.error(f"crypto_ws_api.ws_session.handle_request(): {ex}")
+        self.logger.warning(f"{trade_id}: {method}: None response")
         return None
 
     async def stop(self, _trade_id):
-        user_wss = {}
-        for k in list(self.user_wss.keys()):  # NOSONAR
-            if _trade_id in k:
-                user_wss[k] = self.user_wss.pop(k)
+        user_wss_to_stop = []
+        for key in list(self.user_wss.keys()):
+            if _trade_id in key:
+                user_wss_to_stop.append((key, self.user_wss.pop(key)))
 
-        [await ws.stop() for ws in user_wss.values()]
+        # Stop each UserWSS instance and clean up
+        await asyncio.gather(*[ws.stop() for _, ws in user_wss_to_stop])
 
-        tasks = set()
-        [tasks.add(task) for task in self.tasks_wss if _trade_id in task.get_name()]
-        self.tasks_wss.difference_update(tasks)
-        await tasks_cancel(tasks)
+        # Remove related tasks
+        to_cancel = set()
+        for task in self.tasks_wss:
+            if _trade_id in task.get_name():
+                to_cancel.add(task)
+
+        self.tasks_wss.difference_update(to_cancel)
+        await tasks_cancel(to_cancel, _logger=self.logger)
