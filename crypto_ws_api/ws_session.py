@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 import inspect
+import ctypes, ctypes.util
 
 from websockets.asyncio.client import connect
 from websockets import ConnectionClosed
@@ -31,7 +32,7 @@ sys.tracebacklimit = 0
 ALPHABET = string.ascii_letters + string.digits
 CONST_WS_START = "userDataStream.start"
 
-def set_logger(name, log_file, file_level=logging.INFO, propagate=False):
+def set_logger(name, log_file, file_level=logging.INFO, propagate=False, set_root_logger=False):
     formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
     #
     fh = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
@@ -47,10 +48,18 @@ def set_logger(name, log_file, file_level=logging.INFO, propagate=False):
     _logger.addHandler(sh)
     _logger.propagate = propagate
 
+    if set_root_logger:
+        root_logger = logging.getLogger()
+        root_logger.setLevel(min([fh.level, sh.level]))
+        root_logger.addHandler(fh)
+        root_logger.addHandler(sh)
+
     return _logger
 
 logger = set_logger(__name__, Path(LOG_PATH, 'ws_session.log'))
 
+def malloc_trim(trim_type: int = 0):
+    ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
 
 def generate_signature(exchange: str, secret: str, data: str) -> str:
     encoding = "utf-8"
@@ -225,6 +234,7 @@ class UserWSS:
         await tasks_cancel(self.tasks, _logger=self.logger)
         self._response_pool.clear()
         gc.collect()
+        malloc_trim()
 
     async def start_wss(self):
         async for self._ws in connect(

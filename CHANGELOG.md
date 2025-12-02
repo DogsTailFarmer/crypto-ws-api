@@ -1,3 +1,9 @@
+## 2.1.4 - 2025-12-02
+- Add optional root logger configuration to set_logger()
+- Introduce malloc_trim() wrapper for C library memory management
+- Invoke malloc_trim() in WSSession cleanup for memory optimization  
+- Update __init__.py and CHANGELOG.md for version 2.1.4
+
 ## 2.1.3 - 2025-10-16
 ✨ feat(ws_session.py): Add `tasks_cancel()` for structured task cancellation with logging  
 ♻️ refactor(ws_session.py): Refactor task cancellation and stop logic to use `tasks_cancel()`  
