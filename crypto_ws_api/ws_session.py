@@ -412,8 +412,7 @@ class UserWSS:
             return msg
         elif self.exchange == 'okx':
             if msg.get('code') != '0':
-                self.okx_error_handle(msg)
-                msg = None
+                msg = self.okx_error_handle(msg)
             return msg
         elif self.exchange == 'bitfinex':
             return await self.bitfinex_error_handle(msg)
@@ -499,8 +498,11 @@ class UserWSS:
     # endregion
 
     def okx_error_handle(self, msg):
+        _msg = None
         if msg.get('code') == '1':
             self.logger.warning(f"OKX User WSS operation failed: {msg}")
+            if msg['data'][0]['sCode'] == '51138':
+                _msg = msg
         elif msg.get('code') == '63999':
             self.logger.warning(f"An issue occurred on exchange's side: {msg}")
         elif msg.get('code') == '60014':
@@ -508,6 +510,7 @@ class UserWSS:
             self.request_limit_reached = True
         else:
             self.logger.warning(f"Malformed request: status: {msg}")
+        return _msg
 
     async def binance_error_handle(self, msg):
         error_msg = msg.get('error')

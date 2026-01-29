@@ -1,3 +1,6 @@
+## 2.1.6 - 2026-01-29
+🐛 fix(ws_session/okx_error_handle): return msg for code 51138
+
 ## 2.1.5 - 2026-01-29
 🧹 chore(version/websockets): Bump to **2.1.5** and update `websockets` to **16.0**
 
