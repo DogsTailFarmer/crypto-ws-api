@@ -1,3 +1,6 @@
+## 2.1.5 - 2026-01-29
+🧹 chore(version/websockets): Bump to **2.1.5** and update `websockets` to **16.0**
+
 ## 2.1.4 - 2025-12-02
 - Add optional root logger configuration to set_logger()
 - Introduce malloc_trim() wrapper for C library memory management

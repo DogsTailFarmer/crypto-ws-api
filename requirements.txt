@@ -1,6 +1,6 @@
 shortuuid~=1.0.13
 platformdirs==4.5.0
 toml~=0.10.2
-websockets==15.0.1
+websockets==16.0
 ujson~=5.11.0
 cryptography~=46.0.3
