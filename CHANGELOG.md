@@ -1,3 +1,8 @@
+## 2.1.7 - 2026-03-09
+🔧 fix(requirements): update `platformdirs` to version 4.9.4  
+🔧 fix(requirements): update `cryptography` to version 46.0.5  
+📝 docs(changelog): add release notes for version 2.1.7
+
 ## 2.1.6 - 2026-01-29
 🐛 fix(ws_session/okx_error_handle): return msg for code 51138
 
