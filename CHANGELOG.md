@@ -1,3 +1,6 @@
+## 2.1.8 - 2026-04-03
+🔧 fix(requirements): update `ujson` to version 5.12.0 and `cryptography` to version 46.0.6  
+
 ## 2.1.7 - 2026-03-09
 🔧 fix(requirements): update `platformdirs` to version 4.9.4  
 🔧 fix(requirements): update `cryptography` to version 46.0.5  
