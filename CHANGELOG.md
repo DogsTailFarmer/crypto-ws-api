@@ -1,3 +1,7 @@
+## 2.1.9 - 2026-04-28
+🔧 fix(requirements): update `platformdirs` to version 4.9.6 and `cryptography` to version 46.0.7  
+📝 docs(changelog): add release notes for version 2.1.9
+
 ## 2.1.8 - 2026-04-03
 🔧 fix(requirements): update `ujson` to version 5.12.0 and `cryptography` to version 46.0.6  
 
