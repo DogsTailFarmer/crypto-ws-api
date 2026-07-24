@@ -1,3 +1,7 @@
+## 2.1.10 - 2026-07-24
+🔧 chore(pyproject.toml): update dependencies to latest versions for platformdirs, websockets, ujson, and cryptography  
+🔧 chore(requirements.txt): synchronize dependency versions with pyproject.toml for consistency  
+
 ## 2.1.9 - 2026-04-28
 🔧 fix(requirements): update `platformdirs` to version 4.9.6 and `cryptography` to version 46.0.7  
 📝 docs(changelog): add release notes for version 2.1.9
