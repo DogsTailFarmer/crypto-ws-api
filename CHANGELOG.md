@@ -1,3 +1,7 @@
+## 2.1.11 - 2026-07-25
+🔧 chore(pyproject.toml): pin dependencies to specific versions for consistency  
+🔧 chore(requirements.txt): pin dependencies to specific versions for consistency  
+
 ## 2.1.10 - 2026-07-24
 🔧 chore(pyproject.toml): update dependencies to latest versions for platformdirs, websockets, ujson, and cryptography  
 🔧 chore(requirements.txt): synchronize dependency versions with pyproject.toml for consistency  
