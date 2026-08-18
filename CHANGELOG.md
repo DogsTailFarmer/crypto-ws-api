@@ -1,3 +1,6 @@
+## 2.1.12 - 2026-08-18
+🔧 deps(requirements.txt, pyproject.toml): update dependencies versions
+
 ## 2.1.11 - 2026-07-25
 🔧 chore(pyproject.toml): pin dependencies to specific versions for consistency  
 🔧 chore(requirements.txt): pin dependencies to specific versions for consistency  
