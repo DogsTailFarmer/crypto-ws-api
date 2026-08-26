@@ -1,3 +1,8 @@
+## 2.1.12 - 2026-08-26
+🔧 deps(requirements.txt, pyproject.toml): bump dependencies versions
+🚀 ws_session: add `orjson` and refactor JSON handling
+📝 CHANGELOG: add new version header
+
 ## 2.1.12 - 2026-08-18
 🔧 deps(requirements.txt, pyproject.toml): update dependencies versions
 

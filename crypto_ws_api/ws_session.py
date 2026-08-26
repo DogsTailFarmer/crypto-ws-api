@@ -5,9 +5,9 @@ import gc
 import sys
 import time
 import logging.handlers
+from logging import Logger
 from pathlib import Path
-import ujson as json
-from ujson import JSONDecodeError
+import orjson
 import hmac
 import hashlib
 import base64
@@ -32,7 +32,7 @@ sys.tracebacklimit = 0
 ALPHABET = string.ascii_letters + string.digits
 CONST_WS_START = "userDataStream.start"
 
-def set_logger(name, log_file, file_level=logging.INFO, propagate=False, set_root_logger=False):
+def set_logger(name, log_file, file_level=logging.INFO, propagate=False, set_root_logger=False) -> Logger:
     formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
     #
     fh = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
@@ -56,11 +56,13 @@ def set_logger(name, log_file, file_level=logging.INFO, propagate=False, set_roo
 
     return _logger
 
-logger = set_logger(__name__, Path(LOG_PATH, 'ws_session.log'))
+logger: Logger = set_logger(__name__, Path(LOG_PATH, 'ws_session.log'))
 
 def malloc_trim(trim_type: int = 0):
     ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
 
+
+# noinspection unresolved-references
 def generate_signature(exchange: str, secret: str, data: str) -> str:
     encoding = "utf-8"
     if exchange == 'binance':
@@ -180,6 +182,7 @@ class UserWSS:
         self.tasks = set()
         self.ping = 0
         self.stopped = False
+        self.logger: Logger = logger
 
         if self.exchange == DEBUG_LOG:
             log_key = f"ws_{trade_id}"
@@ -187,16 +190,16 @@ class UserWSS:
                 self.logger = logging.root.manager.loggerDict[log_key]
             else:
                 self.logger = set_logger(log_key, Path(LOG_PATH, f"{log_key}.log"), logging.DEBUG)
-        else:
-            self.logger = logger
 
+
+    # noinspection unhashable
     async def _ws_listener(self):  # NOSONAR(S3776)
         tasks_manage(self.tasks, self.ws_login(), f"ws_login-{self.ws_id}")
         async for msg in self._ws:
             if isinstance(msg, str):
                 try:
-                    _msg = json.loads(msg)
-                except JSONDecodeError:
+                    _msg = orjson.loads(msg)
+                except orjson.JSONDecodeError:
                     self.logger.warning(f"UserWSS JSONDecodeError: {self.ws_id}: {msg}")
                 else:
                     res = await self._handle_msg(_msg)
@@ -298,7 +301,7 @@ class UserWSS:
         else:
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT.get(self.exchange, 64):]
         await self._ws.send(
-            json.dumps(self.compose_request(_id, method, params, _signed))
+            orjson.dumps(self.compose_request(_id, method, params, _signed))
         )
         await asyncio.sleep(0)
         try:
@@ -425,7 +428,7 @@ class UserWSS:
                     }
                 }
                 self.ping = 0
-                await self._ws.send(json.dumps(pong))
+                await self._ws.send(orjson.dumps(pong))
                 return 'pass'
 
             if msg.get('code') == 200 or msg.get('status') == 'ok':
@@ -557,7 +560,7 @@ class UserWSSession:
         self._passphrase = passphrase
         self.user_wss = {}
         self.tasks_wss = set()
-        self.logger = logger
+        self.logger: Logger = logger
 
     async def handle_request(  # NOSONAR(S3776)
         self,

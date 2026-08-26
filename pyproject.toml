@@ -1,5 +1,5 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
+requires = ["flit_core >=3.12,<5"]
 build-backend = "flit_core.buildapi"
 
 [project]
@@ -18,11 +18,11 @@ requires-python = ">=3.10"
 
 dependencies = [
     "shortuuid==1.0.13",
-    "platformdirs==4.11.3",
+    "platformdirs==4.11.4",
     "toml==0.10.2",
     "websockets==17.0.1",
-    "ujson==5.13.0",
-    "cryptography==50.0.0"
+    "orjson==3.11.9",
+    "cryptography==50.0.1"
 ]
 
 [tool.flit.module]
