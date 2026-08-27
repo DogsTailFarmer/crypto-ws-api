@@ -56,7 +56,7 @@ def set_logger(name, log_file, file_level=logging.INFO, propagate=False, set_roo
 
     return _logger
 
-logger: Logger = set_logger(__name__, Path(LOG_PATH, 'ws_session.log'))
+logger = set_logger(__name__, Path(LOG_PATH, 'ws_session.log'))
 
 def malloc_trim(trim_type: int = 0):
     ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
@@ -301,7 +301,8 @@ class UserWSS:
         else:
             _id = ''.join(e for e in r_id if e.isalnum())[-ID_LEN_LIMIT.get(self.exchange, 64):]
         await self._ws.send(
-            orjson.dumps(self.compose_request(_id, method, params, _signed))
+            orjson.dumps(self.compose_request(_id, method, params, _signed)),
+            text = True
         )
         await asyncio.sleep(0)
         try:
@@ -428,7 +429,7 @@ class UserWSS:
                     }
                 }
                 self.ping = 0
-                await self._ws.send(orjson.dumps(pong))
+                await self._ws.send(orjson.dumps(pong), text = True)
                 return 'pass'
 
             if msg.get('code') == 200 or msg.get('status') == 'ok':

@@ -1,7 +1,7 @@
-## 2.1.12 - 2026-08-26
+## 2.1.14 - 2026-08-27
+✨ feat(ws_session): replace `logger` type annotation with runtime value
 🔧 deps(requirements.txt, pyproject.toml): bump dependencies versions
-🚀 ws_session: add `orjson` and refactor JSON handling
-📝 CHANGELOG: add new version header
+🚀 refactor(ws_session): switch to `orjson` for JSON handling
 
 ## 2.1.12 - 2026-08-18
 🔧 deps(requirements.txt, pyproject.toml): update dependencies versions
