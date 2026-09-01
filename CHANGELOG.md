@@ -1,3 +1,8 @@
+## 2.1.15 - 2026-09-01
+✨ feat(CHANGELOG.md): add release notes for version 2.1.15
+🔧 deps(pyproject.toml): restrict flit_core to <4
+✨ feat(__init__.py): bump version to 2.1.15
+
 ## 2.1.14 - 2026-08-27
 ✨ feat(ws_session): replace `logger` type annotation with runtime value
 🔧 deps(requirements.txt, pyproject.toml): bump dependencies versions
